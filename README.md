@@ -8,9 +8,9 @@ Nx monorepo for **ng-signal-http**, a signal-native HTTP client library for Angu
 
 | Path | Type | Description |
 |---|---|---|
-| `ng-signal-http/` | Library | The publishable Angular library (`ng-signal-http` on npm) |
-| `demo/` | Application | Angular SSR demo app showcasing the library |
-| `demo-e2e/` | E2E | Cypress end-to-end tests for the demo app |
+| `projects/signal-http/` | Library | The publishable Angular library (`ng-signal-http` on npm) |
+| `projects/demo/` | Application | Angular SSR demo app showcasing the library |
+| `projects/demo-e2e/` | E2E | Cypress end-to-end tests for the demo app |
 
 ---
 
@@ -53,42 +53,32 @@ npm install
 
 ```bash
 # Build the library
-npx nx build ng-signal-http
+npm run build
 
 # Run unit tests
-npx nx test ng-signal-http
+npm test
+
+# Run unit tests (CI, no watch, with coverage)
+npm run test:ci
 
 # Lint
-npx nx eslint:lint ng-signal-http
+npm run lint
 ```
 
 ### Demo app
 
 ```bash
 # Serve locally (http://localhost:4200)
-npx nx serve demo
+npm start
 
 # Build for production
-npx nx build demo
-
-# Run unit tests
-npx nx test demo
+npm run build:demo
 ```
 
 ### E2E tests
 
 ```bash
-npx nx e2e demo-e2e
-```
-
-### Run everything
-
-```bash
-# Build all projects
-npx nx run-many -t build
-
-# Test all projects
-npx nx run-many -t test
+npm run start:demo-e2e
 ```
 
 ---
