@@ -1,0 +1,48 @@
+.app-header {
+  background: white;
+  padding: 1rem 2rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
+
+  h1 {
+    margin: 0 0 0.75rem;
+    font-size: 1.25rem;
+    color: #111;
+  }
+
+  .badge {
+    font-size: 0.65rem;
+    background: #dbeafe;
+    color: #1d4ed8;
+    padding: 0.125rem 0.4rem;
+    border-radius: 4px;
+    vertical-align: middle;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+
+  nav {
+    display: flex;
+    gap: 0.25rem;
+
+    a {
+      color: #6b7280;
+      padding: 0.3rem 0.75rem;
+      border-radius: 5px;
+      font-size: 0.875rem;
+
+      &.active {
+        color: #2563eb;
+        background: #eff6ff;
+        font-weight: 500;
+      }
+    }
+  }
+}
+
+main {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 2rem 3rem;
+}

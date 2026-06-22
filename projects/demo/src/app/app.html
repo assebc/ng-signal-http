@@ -1,2 +1,12 @@
-<div>working!</div>
-<router-outlet></router-outlet>
+<header class="app-header">
+  <h1>ng-signal-http <span class="badge">demo</span></h1>
+  <nav>
+    <a routerLink="/users" routerLinkActive="active">Users List</a>
+    <a routerLink="/users/detail" routerLinkActive="active">User Detail</a>
+    <a routerLink="/users/create" routerLinkActive="active">Create User</a>
+    <a routerLink="/posts" routerLinkActive="active">Posts</a>
+  </nav>
+</header>
+<main>
+  <router-outlet />
+</main>

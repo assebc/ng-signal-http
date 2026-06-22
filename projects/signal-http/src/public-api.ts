@@ -1,13 +1,10 @@
-// Core, what consumers inject and configure (low level)
 export { SignalHttpClient } from './lib/core/signal-http-client';
 export { provideSignalHttp, SIGNAL_HTTP_CONFIG } from './lib/core/providers';
 export { HttpError } from './lib/core/http-error';
 
-// Reactive API
 export { querySignal } from './lib/query/query-signal';
 export { mutationSignal } from './lib/mutation/mutation-signal';
 
-// Types, everything a consumer might need to annotate their code
 export type {
   SignalHttpConfig,
   HttpInterceptor,
