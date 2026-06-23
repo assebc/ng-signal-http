@@ -1,6 +1,7 @@
 {
   "name": "@assebc/ng-signal-http",
   "version": "1.0.0",
+  "description": "Signal-native HTTP client for Angular. Wraps the native Fetch API and returns Angular signals directly — no toSignal(), no RxJS required.",
   "peerDependencies": {
     "@angular/common": "^21.2.0",
     "@angular/core": "^21.2.0"

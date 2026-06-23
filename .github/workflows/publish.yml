@@ -6,12 +6,8 @@ on:
       - 'v*'
 
 jobs:
-  publish:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
     steps:
       - uses: actions/checkout@v4
 
@@ -25,9 +21,25 @@ jobs:
 
       - run: npx nx run ng-signal-http:build:production --skip-nx-cache
 
-      # ── Publish to npm ──────────────────────────────────────────────────────
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/ng-signal-http
+
+  publish-npm:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/ng-signal-http
+
       - uses: actions/setup-node@v4
         with:
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Publish to npm
@@ -36,9 +48,21 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # ── Publish to GitHub Packages ──────────────────────────────────────────
+  publish-gpr:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/ng-signal-http
+
       - uses: actions/setup-node@v4
         with:
+          node-version: '22'
           registry-url: 'https://npm.pkg.github.com'
 
       - name: Publish to GitHub Packages

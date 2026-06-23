@@ -18,7 +18,7 @@ Target: Angular 17+ (signals required). Zero runtime dependencies beyond `@angul
 ```
 /                              ← workspace root (Nx monorepo)
 ├── projects/
-│   ├── signal-http/           ← publishable library (npm: ng-signal-http)
+│   ├── signal-http/           ← publishable library (npm: @assebc/ng-signal-http)
 │   ├── demo/                  ← Angular SSR app that exercises the library
 │   └── demo-e2e/              ← Cypress E2E tests for the demo app
 ├── tsconfig.base.json         ← root TypeScript config (strict mode, path aliases)
@@ -98,7 +98,7 @@ npx nx run-many -t test         # test everything
 ## TypeScript config chain
 
 ```
-tsconfig.base.json               ← strict flags + path alias ng-signal-http
+tsconfig.base.json               ← strict flags + path alias @assebc/ng-signal-http
   └── projects/signal-http/tsconfig.json
         ├── tsconfig.lib.json    ← library build (also declares strict flags explicitly)
         └── tsconfig.spec.json   ← Vitest
@@ -112,11 +112,11 @@ Path alias in `tsconfig.base.json`:
 
 ```json
 "paths": {
-  "ng-signal-http": ["./projects/signal-http/src/index.ts"]
+  "@assebc/ng-signal-http": ["./projects/signal-http/src/index.ts"]
 }
 ```
 
-The demo app inherits this alias automatically — import from `ng-signal-http`, not relative paths.
+The demo app inherits this alias automatically — import from `@assebc/ng-signal-http`, not relative paths.
 
 ---
 

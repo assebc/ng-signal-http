@@ -979,7 +979,7 @@ All error messages must be:
 - Owner: Community feedback
 
 **Q5: Package name?**
-- Options: `@ngx-http-signals`, `ng-signal-http`, `angular-http-signals`
+- Options: `ng-signal-http`,
 - Decision by: Before npm publish
 - Owner: Marketing/Product
 
@@ -1008,29 +1008,3 @@ All error messages must be:
 - [Fetch API Specification](https://fetch.spec.whatwg.org/)
 - [TanStack Query](https://tanstack.com/query) - Inspiration for API design
 - [SWR](https://swr.vercel.app/) - Stale-while-revalidate pattern
-
-### 15.3 Revision History
-
-| Version | Date | Author | Changes |
-|---------|------|--------|---------|
-| 1.0 | 2026-05-21 | Product Team | Initial PRD creation |
-
----
-
-## 16. Approval
-
-**Pending Approvals:**
-- [ ] Technical Lead - Architecture review
-- [ ] Product Owner - Feature scope
-- [ ] Engineering Manager - Resource allocation
-- [ ] Marketing - GTM strategy
-
----
-
-**Document Status:** DRAFT  
-**Last Updated:** May 21, 2026  
-**Next Review:** Before MVP development starts  
-
----
-
-*This document is subject to change as the project evolves. All stakeholders will be notified of major revisions.*
