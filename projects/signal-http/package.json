@@ -1,9 +1,19 @@
 {
   "name": "ng-signal-http",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "peerDependencies": {
     "@angular/common": "^21.2.0",
     "@angular/core": "^21.2.0"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/assebc/ng-signal-http.git"
+  },
+  "bugs": {
+    "url": "https://github.com/assebc/ng-signal-http/issues"
+  },
+  "homepage": "https://github.com/assebc/ng-signal-http#readme",
+  "license": "MIT",
+  "keywords": ["angular", "signals", "http", "zoneless", "fetch", "rxjs-free"]
 }
