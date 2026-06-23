@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { querySignal } from 'ng-signal-http';
+import { querySignal } from '@assebc/ng-signal-http';
 import { Post } from '../models';
 
 @Injectable({ providedIn: 'root' })

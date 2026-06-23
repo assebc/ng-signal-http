@@ -5,7 +5,7 @@ import {
 import { provideRouter } from '@angular/router';
 import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
 import { appRoutes } from './app.routes';
-import { provideSignalHttp } from 'ng-signal-http';
+import { provideSignalHttp } from '@assebc/ng-signal-http';
 
 export const appConfig: ApplicationConfig = {
   providers: [

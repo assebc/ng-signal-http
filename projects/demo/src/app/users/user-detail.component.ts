@@ -1,5 +1,5 @@
 import { Component, signal } from '@angular/core';
-import { querySignal } from 'ng-signal-http';
+import { querySignal } from '@assebc/ng-signal-http';
 import { User } from '../models';
 
 @Component({

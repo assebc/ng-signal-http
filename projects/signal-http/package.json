@@ -1,5 +1,5 @@
 {
-  "name": "ng-signal-http",
+  "name": "@assebc/ng-signal-http",
   "version": "1.0.0",
   "peerDependencies": {
     "@angular/common": "^21.2.0",

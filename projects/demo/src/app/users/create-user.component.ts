@@ -1,5 +1,5 @@
 import { Component, signal } from '@angular/core';
-import { mutationSignal } from 'ng-signal-http';
+import { mutationSignal } from '@assebc/ng-signal-http';
 import { CreateUserBody, User } from '../models';
 
 @Component({

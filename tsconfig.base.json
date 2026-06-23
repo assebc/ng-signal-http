@@ -23,7 +23,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "paths": {
-      "ng-signal-http": [
+      "@assebc/ng-signal-http": [
         "./projects/signal-http/src/index.ts"
       ]
     }
