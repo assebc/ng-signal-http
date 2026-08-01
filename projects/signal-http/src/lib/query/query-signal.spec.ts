@@ -350,4 +350,151 @@ describe('querySignal', () => {
       expect(result.data()).toEqual({ id: 2 });
     });
   });
+
+  // ─── refetchInterval ─────────────────────────────────────────────────────
+
+  describe('refetchInterval', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('calls fetch on each interval tick when not loading', async () => {
+      vi.useFakeTimers();
+      fetchMock.mockResolvedValue(makeJsonResponse({}));
+
+      TestBed.runInInjectionContext(() => {
+        querySignal('/items', { lazy: true, refetchInterval: 1000 });
+      });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('skips the tick when a fetch is already in flight', async () => {
+      vi.useFakeTimers();
+      fetchMock.mockReturnValue(new Promise(() => {}));
+
+      TestBed.runInInjectionContext(() => {
+        // non-lazy: starts loading immediately, so interval ticks are skipped
+        querySignal('/items', { refetchInterval: 1000 });
+      });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(fetchMock).toHaveBeenCalledTimes(1); // only the initial auto-fetch
+    });
+  });
+
+  // ─── refetchOnFocus ───────────────────────────────────────────────────────
+
+  describe('refetchOnFocus', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('refetches when window gains focus and data is stale', async () => {
+      vi.useFakeTimers();
+      fetchMock.mockResolvedValue(makeJsonResponse({ v: 1 }));
+
+      let result!: HttpClientResult<{ v: number }>;
+      TestBed.runInInjectionContext(() => {
+        result = querySignal<{ v: number }>('/items', {
+          lazy: true,
+          refetchOnFocus: true,
+          staleTime: 1000,
+        });
+      });
+
+      await result.refetch();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1001); // push past staleTime
+
+      window.dispatchEvent(new Event('focus'));
+      await vi.runAllTimersAsync();
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not refetch on focus when data is not yet stale', async () => {
+      vi.useFakeTimers();
+      fetchMock.mockResolvedValue(makeJsonResponse({}));
+
+      let result!: HttpClientResult<unknown>;
+      TestBed.runInInjectionContext(() => {
+        result = querySignal('/items', {
+          lazy: true,
+          refetchOnFocus: true,
+          staleTime: 60_000,
+        });
+      });
+
+      await result.refetch();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(100); // well within staleTime
+      window.dispatchEvent(new Event('focus'));
+      await vi.runAllTimersAsync();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── refetchOnReconnect ───────────────────────────────────────────────────
+
+  describe('refetchOnReconnect', () => {
+    it('refetches when the network reconnects', async () => {
+      fetchMock.mockResolvedValue(makeJsonResponse({}));
+
+      TestBed.runInInjectionContext(() => {
+        querySignal('/items', { lazy: true, refetchOnReconnect: true });
+      });
+
+      window.dispatchEvent(new Event('online'));
+      await flushPromises();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not refetch on reconnect when a request is already in flight', async () => {
+      fetchMock.mockReturnValue(new Promise(() => {}));
+
+      let result!: HttpClientResult<unknown>;
+      TestBed.runInInjectionContext(() => {
+        result = querySignal('/items', { lazy: true, refetchOnReconnect: true });
+      });
+
+      result.refetch(); // starts a never-resolving fetch → loading = true
+      window.dispatchEvent(new Event('online'));
+      await flushPromises();
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // ─── Retry with fixed numeric delay (line 194) ────────────────────────────
+
+  describe('retry with fixed delay', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('waits a fixed number of ms between retries', async () => {
+      vi.useFakeTimers();
+      fetchMock
+        .mockRejectedValueOnce(new Error('fail'))
+        .mockResolvedValueOnce(makeJsonResponse({ ok: true }));
+
+      let result!: HttpClientResult<{ ok: boolean }>;
+      TestBed.runInInjectionContext(() => {
+        result = querySignal<{ ok: boolean }>('/items', {
+          lazy: true,
+          retry: { count: 1, delay: 500 },
+        });
+      });
+
+      const p = result.refetch();
+      await vi.advanceTimersByTimeAsync(500);
+      await p;
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(result.data()).toEqual({ ok: true });
+    });
+  });
 });

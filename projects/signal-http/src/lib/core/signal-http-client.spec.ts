@@ -188,6 +188,90 @@ describe('SignalHttpClient', () => {
     });
   });
 
+  // ─── executeRequest — timeout ────────────────────────────────────────────
+
+  describe('executeRequest — timeout', () => {
+    afterEach(() => vi.useRealTimers());
+
+    it('aborts the internal signal after the configured timeout', async () => {
+      vi.useFakeTimers();
+      let capturedSignal!: AbortSignal;
+      fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+        capturedSignal = init.signal as AbortSignal;
+        return new Promise(() => {}); // never resolves
+      });
+
+      const p = client.executeRequest({ url: '/slow', method: 'GET', timeout: 1000 });
+      p.catch(() => {}); // prevent unhandled rejection on the dangling promise
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(capturedSignal.aborted).toBe(true);
+    });
+
+    it('applies the global timeout from provideSignalHttp config', async () => {
+      vi.useFakeTimers();
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [provideSignalHttp({ baseUrl: 'https://api.test.com', timeout: 500 })],
+      });
+      const c = TestBed.inject(SignalHttpClient);
+
+      let capturedSignal!: AbortSignal;
+      fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+        capturedSignal = init.signal as AbortSignal;
+        return new Promise(() => {});
+      });
+
+      const p = c.executeRequest({ url: '/slow', method: 'GET' });
+      p.catch(() => {});
+
+      await vi.advanceTimersByTimeAsync(500);
+
+      expect(capturedSignal.aborted).toBe(true);
+    });
+  });
+
+  // ─── executeRequest — external AbortSignal ────────────────────────────────
+
+  describe('executeRequest — external AbortSignal', () => {
+    it('aborts immediately when the passed signal is already aborted', async () => {
+      // fetch mock rejects synchronously when the signal is already aborted,
+      // matching real browser fetch() behaviour
+      fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+        if ((init.signal as AbortSignal).aborted) {
+          return Promise.reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
+        }
+        return new Promise(() => {});
+      });
+
+      const controller = new AbortController();
+      controller.abort('pre-cancelled');
+
+      await expect(
+        client.executeRequest({ url: '/test', method: 'GET', signal: controller.signal })
+      ).rejects.toMatchObject({ name: 'AbortError' });
+    });
+
+    it('forwards abort from an external signal to the internal request controller', async () => {
+      const external = new AbortController();
+      let capturedSignal!: AbortSignal;
+
+      fetchMock.mockImplementation((_url: string, init: RequestInit) => {
+        capturedSignal = init.signal as AbortSignal;
+        return new Promise(() => {}); // never resolves
+      });
+
+      const p = client.executeRequest({ url: '/test', method: 'GET', signal: external.signal });
+      p.catch(() => {});
+
+      external.abort();
+      await Promise.resolve(); // flush microtasks
+
+      expect(capturedSignal.aborted).toBe(true);
+    });
+  });
+
   // ─── executeRequest — interceptors ───────────────────────────────────────
 
   describe('executeRequest — interceptors', () => {
