@@ -17,7 +17,9 @@ jobs:
 
       - run: npm ci
 
-      - run: npm test
+      - run: npm run lint
+
+      - run: npm run test:ci
 
       - run: npx nx run ng-signal-http:build:production --skip-nx-cache
 

@@ -21,6 +21,7 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.0.0",
     "@typescript-eslint/utils": "^8.40.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "angular-eslint": "^21.2.0",
     "autoprefixer": "^10.4.0",
     "cypress": "^15.14.2",
@@ -59,7 +60,7 @@
     "build": "nx build ng-signal-http",
     "build:demo": "nx build demo",
     "test": "nx test ng-signal-http",
-    "test:ci": "nx test ng-signal-http --watch=false --code-coverage",
+    "test:ci": "nx test ng-signal-http --watch=false --coverage",
     "lint": "nx run ng-signal-http:lint"
   },
   "nx": {

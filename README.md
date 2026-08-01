@@ -223,7 +223,21 @@ Persistent cache (IndexedDB) · WebSocket signal integration · GraphQL adapter 
 
 ---
 
+## Migration from HttpClient
+
+See **[MIGRATION.md](MIGRATION.md)** for a step-by-step guide covering:
+
+- Replacing `provideHttpClient()` with `provideSignalHttp()`
+- Converting GET requests to `querySignal`
+- Converting mutations to `mutationSignal`
+- Migrating interceptors
+- Using `SignalHttpClient` for imperative calls in services
+
+---
+
 ## Contributing & development
+
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide. Quick reference:
 
 ```
 /
@@ -236,6 +250,7 @@ Persistent cache (IndexedDB) · WebSocket signal integration · GraphQL adapter 
 npm install                # install deps
 npm start                  # demo app → http://localhost:4200
 npm test                   # unit tests
+npm run test:ci            # unit tests with coverage
 npm run build              # build the library
 npm run lint               # lint
 npm run start:demo-e2e     # Cypress E2E
