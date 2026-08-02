@@ -14,6 +14,9 @@ This guide walks through replacing Angular's `HttpClient` with `@assebc/ng-signa
 | Auto-refetch on signal change | Manual `effect` | Automatic |
 | Request cancellation | Manual `takeUntilDestroyed` | Automatic |
 | Retry | Manual `retry()` pipe | Built-in |
+| Caching / SWR | Manual | Built-in |
+| WebSocket | Separate | Built-in |
+| GraphQL | Separate | Built-in |
 | RxJS required | Yes | No |
 | Bundle overhead | ~25 KB (HttpClient + RxJS) | <15 KB |
 
@@ -117,13 +120,25 @@ export class UserDetailComponent {
 }
 ```
 
+### With caching and polling
+
+```typescript
+const result = querySignal<Post[]>('/api/posts', {
+  staleTime: 60_000,         // serve cache; revalidate in background if older than 60 s
+  refetchOnFocus: true,      // revalidate when tab regains focus
+  refetchOnReconnect: true,  // revalidate when network reconnects
+  refetchInterval: 30_000,   // poll every 30 s
+  retry: 3,
+});
+```
+
 ### With options
 
 ```typescript
-const result = querySignal<Post[]>(() => '/api/posts', {
+const result = querySignal<Post[]>('/api/posts', {
   initialValue: [],
-  lazy: true,             // don't fetch until refetch() is called
-  retry: 3,              // retry up to 3 times on failure
+  lazy: true,                // don't fetch until refetch() is called
+  retry: 3,
   onSuccess: (data) => console.log('loaded', data.length),
   onError: (err) => console.error(err),
 });
@@ -168,6 +183,23 @@ export class CreateUserComponent {
     this.createUser.mutate(dto);
   }
 }
+```
+
+### Optimistic updates
+
+```typescript
+const updateUser = mutationSignal<UpdateUserDto, User>(
+  (body) => ({ url: `/api/users/${body.id}`, method: 'PUT', body }),
+  {
+    onMutate: (input) => {
+      const snapshot = previousData();
+      applyOptimisticUpdate(input);
+      return snapshot; // returned as rollback context
+    },
+    onError: (err, input, snapshot) => rollback(snapshot),
+    onSettled: () => invalidateUserList(),
+  }
+);
 ```
 
 ---
@@ -266,7 +298,124 @@ export class UserService {
 
 ---
 
-## 7. Remove old HttpClient imports
+## 7. Add persistent cache (optional)
+
+Cache survives page reloads via IndexedDB. Add after `provideSignalHttp`:
+
+```typescript
+import { provideSignalHttp, providePersistentCache } from '@assebc/ng-signal-http';
+
+providers: [
+  provideSignalHttp({ baseUrl: 'https://api.example.com' }),
+  providePersistentCache({ dbName: 'my-app-cache' }),
+]
+```
+
+No other code changes needed — `querySignal` picks up the adapter automatically.
+
+---
+
+## 8. Add WebSocket support (optional)
+
+Replace a manual WebSocket setup with `websocketSignal`:
+
+**Before**
+
+```typescript
+export class FeedComponent implements OnInit, OnDestroy {
+  data: StockTick | null = null;
+  private ws!: WebSocket;
+
+  ngOnInit() {
+    this.ws = new WebSocket('wss://api.example.com/feed');
+    this.ws.onmessage = (e) => { this.data = JSON.parse(e.data); };
+  }
+
+  ngOnDestroy() { this.ws.close(); }
+}
+```
+
+**After**
+
+```typescript
+import { websocketSignal } from '@assebc/ng-signal-http';
+
+export class FeedComponent {
+  feed = websocketSignal<StockTick>('wss://api.example.com/feed', {
+    reconnect: { maxAttempts: 5, delay: (n) => 1000 * 2 ** n },
+  });
+
+  // feed.data()   — latest message
+  // feed.status() — 'connecting' | 'open' | 'closed' | 'error'
+  // feed.send(payload)
+  // feed.close() / feed.reconnect()
+}
+```
+
+Socket closes and cleanup happen automatically on component destroy.
+
+---
+
+## 9. Add GraphQL support (optional)
+
+Replace a manual GraphQL fetch with `graphqlQuery` or `graphqlMutation`:
+
+**Before**
+
+```typescript
+this.http.post('/graphql', {
+  query: 'query { users { id name } }',
+}).subscribe((res: any) => {
+  if (res.errors) throw new Error(res.errors[0].message);
+  this.users = res.data.users;
+});
+```
+
+**After**
+
+```typescript
+import { graphqlQuery } from '@assebc/ng-signal-http';
+
+const result = graphqlQuery<{ users: User[] }>('/graphql', 'query { users { id name } }');
+// result.data()?.users — unwrapped automatically
+// errors surface as GraphQLRequestError on result.error()
+```
+
+Reactive variables:
+
+```typescript
+const userId = signal(1);
+const user = graphqlQuery<{ user: User }, { id: number }>(
+  '/graphql',
+  'query GetUser($id: ID!) { user(id: $id) { id name } }',
+  { variables: () => ({ id: userId() }) }, // re-fetches when userId() changes
+);
+```
+
+---
+
+## 10. Add a plugin (optional)
+
+Bundle interceptors and cache hooks under a named plugin:
+
+```typescript
+import { SignalHttpPlugin, provideSignalHttp } from '@assebc/ng-signal-http';
+
+const analyticsPlugin: SignalHttpPlugin = {
+  name: 'analytics',
+  interceptors: [timingInterceptor],
+  onCacheSet: (key, data) => track('cache_set', { key }),
+  onCacheDelete: (key) => track('cache_delete', { key }),
+};
+
+providers: [
+  provideSignalHttp({ plugins: [analyticsPlugin] })
+]
+```
+
+---
+
+## 11. Remove old HttpClient imports
 
 Once migration is complete:
 
@@ -289,10 +438,12 @@ import { provideHttpClient } from '@angular/common/http';
 
 **`toSignal()` wrapping** — you no longer need it. `querySignal` returns signals directly.
 
-**Manual unsubscribe** — you no longer need `takeUntilDestroyed()` or `ngOnDestroy`. Requests cancel automatically when the host is destroyed.
+**Manual unsubscribe** — you no longer need `takeUntilDestroyed()` or `ngOnDestroy`. Requests and sockets cancel automatically when the host is destroyed.
 
 **Error handling in subscribe** — replace `.subscribe({ error: ... })` with the `onError` option or read `result.error()` in the template.
 
 **Retry pipes** — remove `retry()`, `catchError()`, and `retryWhen()` pipes. Use the `retry` option on `querySignal`.
 
 **HttpHeaders / HttpParams** — these classes are not used. Pass plain objects: `headers: { 'X-Custom': 'value' }`, `params: { page: '1' }`.
+
+**GraphQL errors** — `graphqlQuery` throws `GraphQLRequestError` (not a generic `Error`) when `response.errors` is non-empty or `response.data` is `null`. Use `instanceof GraphQLRequestError` to handle them specifically.

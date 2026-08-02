@@ -37,15 +37,31 @@ projects/signal-http/src/
 └── lib/
     ├── types.ts               ← all shared types and interfaces (source of truth)
     ├── core/
-    │   ├── http-error.ts      ← HttpError class
-    │   ├── signal-http-client.ts  ← SignalHttpClient injectable (Fetch wrapper)
-    │   └── providers.ts       ← provideSignalHttp() environment provider
+    │   ├── cache-key.ts           ← buildCacheKey() — includes body for non-GET
+    │   ├── devtools.ts            ← withRequestLogging() interceptor
+    │   ├── http-cache.service.ts  ← HttpCacheService — in-memory + IDB + plugin events
+    │   ├── http-error.ts          ← HttpError class
+    │   ├── idb-cache.ts           ← IdbCacheAdapter + IDB_CACHE_ADAPTER token
+    │   ├── plugin.service.ts      ← PluginService (providedIn: 'root')
+    │   ├── providers.ts           ← provideSignalHttp() + providePersistentCache()
+    │   ├── request-utils.ts       ← attemptWithRetry, isAbortError, toError
+    │   └── signal-http-client.ts  ← SignalHttpClient injectable (Fetch wrapper)
+    ├── graphql/
+    │   ├── graphql-error.ts       ← GraphQLRequestError
+    │   ├── graphql-signal.ts      ← graphqlQuery(), graphqlMutation()
+    │   └── graphql.types.ts       ← GraphQLQueryOptions, GraphQLMutationOptions, etc.
+    ├── mutation/
+    │   ├── mutation.types.ts      ← MutationFactory
+    │   └── mutation-signal.ts     ← mutationSignal()
     ├── query/
-    │   ├── query.types.ts     ← QueryOptions, QueryResult, UrlFactory
-    │   └── query-signal.ts    ← querySignal() function
-    └── mutation/
-        ├── mutation.types.ts  ← MutationOptions, MutationResult
-        └── mutation-signal.ts ← mutationSignal() function
+    │   ├── paginated-query-signal.ts ← paginatedQuerySignal()
+    │   ├── parallel-queries.ts       ← parallelQueries()
+    │   ├── prefetch-query.ts         ← prefetchQuery()
+    │   ├── query.types.ts            ← UrlFactory
+    │   └── query-signal.ts           ← querySignal()
+    └── websocket/
+        ├── websocket.types.ts     ← WebSocketOptions, WebSocketResult, etc.
+        └── websocket-signal.ts    ← websocketSignal()
 ```
 
 `index.ts` is the only public surface. Never import from internal paths in consuming code.
@@ -66,6 +82,7 @@ projects/signal-http/src/
 | Formatting | Prettier 3.6 |
 | Local registry | Verdaccio (`.verdaccio/`) for publish smoke-tests |
 | SSR runtime | Express 4 via `@angular/ssr` |
+| IDB testing | `fake-indexeddb` (devDep, jsdom only) |
 
 ---
 
@@ -126,36 +143,54 @@ All shared types live in one file. This is the source of truth — do not duplic
 
 | Type | Purpose |
 |---|---|
-| `SignalHttpConfig` | Global config passed to `provideSignalHttp()` |
+| `SignalHttpConfig` | Global config passed to `provideSignalHttp()` — includes `plugins` |
 | `HttpInterceptor` | `request` / `response` / `error` hooks |
 | `RequestConfig` | Per-request options (url, method, headers, body, params, timeout, signal) |
 | `RetryConfig` | Retry count + delay strategy + `shouldRetry` predicate |
-| `HttpClientOptions<T>` | Options for `querySignal()` — lazy, retry, stale/refetch knobs, callbacks |
+| `HttpClientOptions<T>` | Options for `querySignal()` — lazy, retry, stale/refetch knobs, `select`, callbacks |
 | `HttpClientResult<T>` | Return value of `querySignal()` — data/loading/error/status signals + refetch/invalidate/reset |
-| `MutationOptions<TI,TO>` | Callbacks for `mutationSignal()` |
+| `MutationOptions<TI,TO,TC>` | Callbacks for `mutationSignal()` — includes `select`, `onMutate` with context |
 | `MutationResult<TI,TO>` | Return value of `mutationSignal()` — isPending/error/data signals + mutate/reset |
+| `SignalHttpPlugin` | `name`, optional `interceptors[]`, `onCacheSet`, `onCacheDelete`, `onCacheClear` |
+| `QueryStatus` | `'idle' \| 'loading' \| 'success' \| 'error'` |
 
 ---
 
-## API surface (MVP)
+## Full API surface
 
 ```typescript
-// Setup — call once in app.config.ts
+// ── Setup ────────────────────────────────────────────────────────────────────
 provideSignalHttp(config?: SignalHttpConfig): EnvironmentProviders
+providePersistentCache(options?: IdbCacheOptions): EnvironmentProviders
 
-// GET requests — reactive, auto-refetch on signal dependency change
-querySignal<T>(urlFactory: () => string | RequestConfig, options?: HttpClientOptions<T>): HttpClientResult<T>
+// ── Reactive queries ─────────────────────────────────────────────────────────
+querySignal<T>(url: string | UrlFactory, options?: HttpClientOptions<T>): HttpClientResult<T>
+paginatedQuerySignal<T>(urlFactory: (page: unknown) => string, options?: PaginatedOptions<T>): PaginatedResult<T>
+parallelQueries<T>(factories: UrlFactory[], options?: HttpClientOptions<T>): ParallelQueriesResult<T>
+prefetchQuery(urlOrConfig: string | RequestConfig, options?: { staleTime?: number }): Promise<void>
 
-// POST / PUT / PATCH / DELETE — user-triggered
-mutationSignal<TInput, TOutput>(
-  requestFactory: (input: TInput) => RequestConfig,
-  options?: MutationOptions<TInput, TOutput>
-): MutationResult<TInput, TOutput>
+// ── Mutations ────────────────────────────────────────────────────────────────
+mutationSignal<TInput, TOutput>(factory: MutationFactory<TInput>, options?: MutationOptions<TInput, TOutput>): MutationResult<TInput, TOutput>
 
-// Direct imperative calls (guards, services)
+// ── WebSocket ────────────────────────────────────────────────────────────────
+websocketSignal<T>(url: string | UrlFactory, options?: WebSocketOptions<T>): WebSocketResult<T>
+
+// ── GraphQL ──────────────────────────────────────────────────────────────────
+graphqlQuery<TData, TVariables>(endpoint: string, document: string, options?: GraphQLQueryOptions<TData, TVariables>): HttpClientResult<TData>
+graphqlMutation<TData, TVariables>(endpoint: string, document: string, options?: GraphQLMutationOptions<TData, TVariables>): MutationResult<TVariables, TData>
+
+// ── Imperative / low-level ───────────────────────────────────────────────────
 class SignalHttpClient {
-  get / post / put / patch / delete / request
+  executeRequest<T>(config: RequestConfig): Promise<T>
+  get<T>(url: string, options?: RequestOptions): Promise<T>
+  post<T>(url: string, body?: unknown, options?: RequestOptions): Promise<T>
+  put<T>(url: string, body?: unknown, options?: RequestOptions): Promise<T>
+  patch<T>(url: string, body?: unknown, options?: RequestOptions): Promise<T>
+  delete<T>(url: string, options?: RequestOptions): Promise<T>
 }
+
+// ── Devtools ─────────────────────────────────────────────────────────────────
+withRequestLogging(options?: RequestLoggingOptions): HttpInterceptor
 ```
 
 ---
@@ -167,7 +202,10 @@ class SignalHttpClient {
 - **No `any`**: strict TypeScript throughout. Generic inference must work without explicit annotations at call sites.
 - **AbortController everywhere**: in-flight requests cancel on component destroy and when reactive deps change. Cancelled requests never update signals.
 - **Never retry an AbortError**: check `error.name === 'AbortError'` before applying retry logic.
-- **Interceptors are async**: all three hooks (`request`, `response`, `error`) support `Promise` return values and run in registration order.
+- **Interceptors are async**: all three hooks (`request`, `response`, `error`) support `Promise` return values and run in registration order (config interceptors first, then plugin interceptors).
+- **Cache stores raw, select is re-applied**: `select` transforms the value at read time; the raw response is always what goes into the cache so that `select` can be applied consistently on every hit.
+- **`restore()` vs `set()` in HttpCacheService**: use `restore()` during hydration — it writes to the in-memory map only, bypassing the IDB adapter and plugin events to avoid a write-back loop.
+- **SSR guards**: WebSocket and window event listeners (`focus`, `online`) are no-ops on the server. Check `isPlatformBrowser` before accessing `window`.
 - **Component prefix**: `sh` (e.g. `<sh-example>`). Directives use camelCase `sh` prefix.
 
 ---
@@ -197,27 +235,33 @@ class SignalHttpClient {
 
 Unit tests live next to source files (`*.spec.ts`). E2E tests are in `projects/demo-e2e/src/e2e/`.
 
-Critical test cases:
-- Successful GET returns data signal
-- Failed request sets error signal, clears loading
-- Loading transitions: idle → loading → success / error
-- Request cancels when component destroys
-- Retry executes N times with backoff; AbortError is not retried
-- Interceptors modify request config and response
-- Reactive query refetches when signal dependency changes
+### IDB tests
+
+- Use `import 'fake-indexeddb/auto'` at the top of `idb-cache.spec.ts` — it installs `indexedDB` into `globalThis` for jsdom.
+- Use a unique `dbName` per test (e.g. `test-db-${++index}`) to prevent state leaking between tests.
+- `@nx/dependency-checks` is scoped to exclude `**/*.spec.ts` in `eslint.config.mjs` so test-only devDeps (`vitest`, `fake-indexeddb`) don't trigger false lint errors.
+
+### WebSocket tests
+
+- `MockWebSocket` must declare static constants (`static readonly CONNECTING = 0`, etc.) because replacing `globalThis.WebSocket` means `WebSocket.OPEN` resolves to the mock class's static property — without them it is `undefined`.
+- Use `runInInjectionContext(fixture.componentRef.injector, cb)` (not `TestBed.runInInjectionContext`) so `DestroyRef` is component-scoped and `fixture.destroy()` correctly fires cleanup.
+
+### APP_INITIALIZER tests
+
+- `TestBed.inject(APP_INITIALIZER, [])` returns all registered initializer functions. Call each one directly and `await Promise.all(...)` — do not rely on `ApplicationRef.whenStable()` in zoneless test environments.
 
 ---
 
 ## Roadmap (phases from PRD)
 
-**v0.1.0 — MVP (current)**
+**v0.1.0 — MVP** ✅  
 `querySignal`, `mutationSignal`, `SignalHttpClient`, `provideSignalHttp`, interceptors, retry, cancellation.
 
-**v0.2.0**
-In-memory cache with TTL, stale-while-revalidate, optimistic updates, request deduplication, SSR skip-fetch, refetch on focus/reconnect.
+**v0.2.0** ✅  
+In-memory cache + SWR · request deduplication · optimistic updates · `skipOnServer` · refetch on focus/reconnect · `paginatedQuerySignal` · `parallelQueries` · `prefetchQuery` · `withRequestLogging`.
 
-**v1.0.0**
-Persistent cache (IndexedDB), WebSocket signal integration, GraphQL adapter, plugin system.
+**v1.0.0** ✅  
+Persistent cache (IndexedDB) · WebSocket signal integration · GraphQL adapter · plugin system · `select` transform option.
 
 ---
 
@@ -226,5 +270,4 @@ Persistent cache (IndexedDB), WebSocket signal integration, GraphQL adapter, plu
 - Observable-based API
 - Built-in auth flows (use interceptors)
 - IE11 / browsers without native `fetch`
-- GraphQL client (Phase 3 adapter only)
 - REST-specific conventions (stay generic HTTP)
