@@ -65,7 +65,8 @@ export function mutationSignal<TInput, TOutput, TContext = unknown>(
 
     try {
       const config = requestFactory(input);
-      const result = await httpClient.executeRequest<TOutput>({ ...config, signal: abortController.signal });
+      const raw = await httpClient.executeRequest<unknown>({ ...config, signal: abortController.signal });
+      const result = options?.select ? options.select(raw) : (raw as TOutput);
 
       data.set(result);
       options?.onSuccess?.(result, input);

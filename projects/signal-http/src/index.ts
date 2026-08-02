@@ -8,9 +8,12 @@ export { HttpCacheService } from './lib/core/http-cache.service';
 export type { CacheEntry } from './lib/core/http-cache.service';
 export { withRequestLogging } from './lib/core/devtools';
 export type { RequestLoggingOptions } from './lib/core/devtools';
+export { PluginService } from './lib/core/plugin.service';
 
 // Reactive API
 export { querySignal } from './lib/query/query-signal';
+export { graphqlQuery, graphqlMutation } from './lib/graphql/graphql-signal';
+export { GraphQLRequestError } from './lib/graphql/graphql-error';
 export { websocketSignal } from './lib/websocket/websocket-signal';
 export { mutationSignal } from './lib/mutation/mutation-signal';
 export { prefetchQuery } from './lib/query/prefetch-query';
@@ -29,7 +32,9 @@ export type {
   QueryResult,
   MutationOptions,
   MutationResult,
+  SignalHttpPlugin,
 } from './lib/types';
+export type { GraphQLQueryOptions, GraphQLMutationOptions, GraphQLError, GraphQLResponse } from './lib/graphql/graphql.types';
 
 export type { UrlFactory } from './lib/query/query.types';
 export type { WebSocketOptions, WebSocketResult, WebSocketStatus, ReconnectConfig } from './lib/websocket/websocket.types';

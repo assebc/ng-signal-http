@@ -9,6 +9,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { SignalHttpConfig } from '../types';
 import { IdbCacheAdapter, IDB_CACHE_ADAPTER, IdbCacheOptions } from './idb-cache';
 import { HttpCacheService } from './http-cache.service';
+import { PluginService } from './plugin.service';
 
 export const SIGNAL_HTTP_CONFIG = new InjectionToken<SignalHttpConfig>(
   'SIGNAL_HTTP_CONFIG'
@@ -30,8 +31,16 @@ export function provideSignalHttp(config: SignalHttpConfig = {}): EnvironmentPro
   return makeEnvironmentProviders([
     {
       provide: SIGNAL_HTTP_CONFIG,
-      useValue: config
-    }
+      useValue: config,
+    },
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (plugins: PluginService) => () => {
+        if (config.plugins?.length) plugins.register(config.plugins);
+      },
+      deps: [PluginService],
+      multi: true,
+    },
   ]);
 }
 

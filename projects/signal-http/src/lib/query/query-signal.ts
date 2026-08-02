@@ -80,6 +80,9 @@ export function querySignal<T>(
   let abortController: AbortController | undefined;
   let revalidating = false;
 
+  const applySelect = (raw: unknown): T =>
+    options?.select ? options.select(raw) : (raw as T);
+
   const doFetch = async (background = false): Promise<void> => {
     if (options?.skipOnServer && !isBrowser) return;
 
@@ -111,14 +114,14 @@ export function querySignal<T>(
         if (entry) {
           if (!cache.isExpired(cacheKey, options.staleTime)) {
             // Fresh hit — serve from cache, skip network entirely.
-            data.set(entry.data as T);
+            data.set(applySelect(entry.data));
             loading.set(false);
             status.set('success');
             lastFetchAt.set(entry.fetchedAt);
             return;
           }
           // Stale hit — serve cached data immediately, then revalidate silently.
-          data.set(entry.data as T);
+          data.set(applySelect(entry.data));
           loading.set(false);
           status.set('success');
           lastFetchAt.set(entry.fetchedAt);
@@ -132,13 +135,14 @@ export function querySignal<T>(
       if (!background) {
         const inflight = cache.getInflight(cacheKey);
         if (inflight) {
-          const result = await (inflight as Promise<T>);
+          const raw = await (inflight as Promise<unknown>);
           if (!ac.signal.aborted) {
-            data.set(result);
+            const selected = applySelect(raw);
+            data.set(selected);
             status.set('success');
             lastFetchAt.set(Date.now());
-            if (options?.staleTime) cache.set(cacheKey, result);
-            options?.onSuccess?.(result);
+            if (options?.staleTime) cache.set(cacheKey, raw);
+            options?.onSuccess?.(selected);
           }
           return;
         }
@@ -155,11 +159,12 @@ export function querySignal<T>(
       }
 
       const result = await fetchPromise;
-      data.set(result);
+      const selected = applySelect(result);
+      data.set(selected);
       status.set('success');
       lastFetchAt.set(Date.now());
       if (options?.staleTime) cache.set(cacheKey, result);
-      if (!background) options?.onSuccess?.(result);
+      if (!background) options?.onSuccess?.(selected);
     } catch (e) {
       if (isAbortError(e)) return;
       if (!background) {
