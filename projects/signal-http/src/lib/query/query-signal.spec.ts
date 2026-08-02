@@ -502,6 +502,120 @@ describe('querySignal', () => {
     });
   });
 
+  // ─── Request deduplication ───────────────────────────────────────────────
+
+  describe('request deduplication', () => {
+    it('fires only one network request when two callers fetch the same URL concurrently', async () => {
+      fetchMock.mockResolvedValueOnce(makeJsonResponse({ n: 1 }));
+
+      let r1!: HttpClientResult<{ n: number }>;
+      let r2!: HttpClientResult<{ n: number }>;
+      TestBed.runInInjectionContext(() => {
+        r1 = querySignal<{ n: number }>('/data', { lazy: true });
+        r2 = querySignal<{ n: number }>('/data', { lazy: true });
+      });
+
+      // Both fetches start synchronously — r2 joins r1's in-flight promise.
+      await Promise.all([r1.refetch(), r2.refetch()]);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(r1.data()).toEqual({ n: 1 });
+      expect(r2.data()).toEqual({ n: 1 });
+    });
+
+    it('both callers reach success status', async () => {
+      fetchMock.mockResolvedValueOnce(makeJsonResponse({ n: 1 }));
+
+      let r1!: HttpClientResult<{ n: number }>;
+      let r2!: HttpClientResult<{ n: number }>;
+      TestBed.runInInjectionContext(() => {
+        r1 = querySignal<{ n: number }>('/data', { lazy: true });
+        r2 = querySignal<{ n: number }>('/data', { lazy: true });
+      });
+
+      await Promise.all([r1.refetch(), r2.refetch()]);
+
+      expect(r1.status()).toBe('success');
+      expect(r2.status()).toBe('success');
+      expect(r1.loading()).toBe(false);
+      expect(r2.loading()).toBe(false);
+    });
+
+    it('fires both onSuccess callbacks', async () => {
+      const onSuccess1 = vi.fn();
+      const onSuccess2 = vi.fn();
+      fetchMock.mockResolvedValueOnce(makeJsonResponse({ n: 1 }));
+
+      let r1!: HttpClientResult<{ n: number }>;
+      let r2!: HttpClientResult<{ n: number }>;
+      TestBed.runInInjectionContext(() => {
+        r1 = querySignal<{ n: number }>('/data', { lazy: true, onSuccess: onSuccess1 });
+        r2 = querySignal<{ n: number }>('/data', { lazy: true, onSuccess: onSuccess2 });
+      });
+
+      await Promise.all([r1.refetch(), r2.refetch()]);
+
+      expect(onSuccess1).toHaveBeenCalledWith({ n: 1 });
+      expect(onSuccess2).toHaveBeenCalledWith({ n: 1 });
+    });
+
+    it('does not deduplicate requests for different URLs', async () => {
+      fetchMock
+        .mockResolvedValueOnce(makeJsonResponse({ n: 1 }))
+        .mockResolvedValueOnce(makeJsonResponse({ n: 2 }));
+
+      let r1!: HttpClientResult<{ n: number }>;
+      let r2!: HttpClientResult<{ n: number }>;
+      TestBed.runInInjectionContext(() => {
+        r1 = querySignal<{ n: number }>('/data/1', { lazy: true });
+        r2 = querySignal<{ n: number }>('/data/2', { lazy: true });
+      });
+
+      await Promise.all([r1.refetch(), r2.refetch()]);
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(r1.data()).toEqual({ n: 1 });
+      expect(r2.data()).toEqual({ n: 2 });
+    });
+
+    it('clears the in-flight entry after completion so a subsequent fetch goes to the network', async () => {
+      fetchMock
+        .mockResolvedValueOnce(makeJsonResponse({ n: 1 }))
+        .mockResolvedValueOnce(makeJsonResponse({ n: 2 }));
+
+      let r1!: HttpClientResult<{ n: number }>;
+      TestBed.runInInjectionContext(() => {
+        r1 = querySignal<{ n: number }>('/data', { lazy: true });
+      });
+
+      await r1.refetch();  // first fetch — registers then removes in-flight
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      await r1.refetch();  // second fetch — no in-flight, new request
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(r1.data()).toEqual({ n: 2 });
+    });
+
+    it('both callers set error when the shared request fails', async () => {
+      fetchMock.mockRejectedValueOnce(new Error('network down'));
+
+      let r1!: HttpClientResult<{ n: number }>;
+      let r2!: HttpClientResult<{ n: number }>;
+      TestBed.runInInjectionContext(() => {
+        r1 = querySignal<{ n: number }>('/data', { lazy: true });
+        r2 = querySignal<{ n: number }>('/data', { lazy: true });
+      });
+
+      await Promise.all([r1.refetch(), r2.refetch()]);
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(r1.status()).toBe('error');
+      expect(r2.status()).toBe('error');
+      expect(r1.error()?.message).toBe('network down');
+      expect(r2.error()?.message).toBe('network down');
+    });
+  });
+
   // ─── Cache (staleTime) ────────────────────────────────────────────────────
 
   describe('cache (staleTime)', () => {

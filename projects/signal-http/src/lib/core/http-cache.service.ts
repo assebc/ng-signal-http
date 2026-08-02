@@ -8,6 +8,7 @@ export interface CacheEntry {
 @Injectable({ providedIn: 'root' })
 export class HttpCacheService {
   private readonly store = new Map<string, CacheEntry>();
+  private readonly inflight = new Map<string, Promise<unknown>>();
 
   get(key: string): CacheEntry | undefined {
     return this.store.get(key);
@@ -33,5 +34,19 @@ export class HttpCacheService {
     const entry = this.store.get(key);
     if (!entry) return true;
     return Date.now() - entry.fetchedAt > staleTime;
+  }
+
+  // ── In-flight deduplication ─────────────────────────────────────────────
+
+  getInflight(key: string): Promise<unknown> | undefined {
+    return this.inflight.get(key);
+  }
+
+  setInflight(key: string, promise: Promise<unknown>): void {
+    this.inflight.set(key, promise);
+  }
+
+  deleteInflight(key: string): void {
+    this.inflight.delete(key);
   }
 }

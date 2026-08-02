@@ -97,10 +97,10 @@ export function querySignal<T>(
         typeof urlResult === 'string'
           ? { url: urlResult, method: 'GET' }
           : urlResult;
+      const cacheKey = buildCacheKey(urlResult);
 
       // Cache check — foreground only, when staleTime is configured.
       if (!background && options?.staleTime) {
-        const cacheKey = buildCacheKey(urlResult);
         const entry = cache.get(cacheKey);
         if (entry) {
           if (!cache.isExpired(cacheKey, options.staleTime)) {
@@ -121,16 +121,39 @@ export function querySignal<T>(
         }
       }
 
-      const result = await attemptWithRetry<T>(httpClient, requestConfig, ac.signal, options?.retry);
+      // Deduplication — foreground only: join an in-flight request for the same key
+      // rather than firing a duplicate network request.
+      if (!background) {
+        const inflight = cache.getInflight(cacheKey);
+        if (inflight) {
+          const result = await (inflight as Promise<T>);
+          if (!ac.signal.aborted) {
+            data.set(result);
+            status.set('success');
+            lastFetchAt.set(Date.now());
+            if (options?.staleTime) cache.set(cacheKey, result);
+            options?.onSuccess?.(result);
+          }
+          return;
+        }
+      }
+
+      // Network fetch — register as in-flight so concurrent callers can join.
+      const fetchPromise = attemptWithRetry<T>(httpClient, requestConfig, ac.signal, options?.retry);
+      if (!background) {
+        cache.setInflight(cacheKey, fetchPromise);
+        // Clean up whether the fetch succeeds or fails. Using then(f, f) instead of
+        // .finally(f) avoids propagating a rejected promise to the void discard.
+        const removeInflight = () => cache.deleteInflight(cacheKey);
+        void fetchPromise.then(removeInflight, removeInflight);
+      }
+
+      const result = await fetchPromise;
       data.set(result);
       status.set('success');
       lastFetchAt.set(Date.now());
-      if (options?.staleTime) {
-        cache.set(buildCacheKey(urlResult), result);
-      }
-      if (!background) {
-        options?.onSuccess?.(result);
-      }
+      if (options?.staleTime) cache.set(cacheKey, result);
+      if (!background) options?.onSuccess?.(result);
     } catch (e) {
       if (isAbortError(e)) return;
       if (!background) {
