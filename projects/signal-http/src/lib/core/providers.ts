@@ -1,5 +1,14 @@
-import { InjectionToken, makeEnvironmentProviders, EnvironmentProviders } from '@angular/core';
+import {
+  APP_INITIALIZER,
+  InjectionToken,
+  makeEnvironmentProviders,
+  EnvironmentProviders,
+  PLATFORM_ID,
+} from '@angular/core';
+import { isPlatformBrowser } from '@angular/common';
 import { SignalHttpConfig } from '../types';
+import { IdbCacheAdapter, IDB_CACHE_ADAPTER, IdbCacheOptions } from './idb-cache';
+import { HttpCacheService } from './http-cache.service';
 
 export const SIGNAL_HTTP_CONFIG = new InjectionToken<SignalHttpConfig>(
   'SIGNAL_HTTP_CONFIG'
@@ -23,5 +32,49 @@ export function provideSignalHttp(config: SignalHttpConfig = {}): EnvironmentPro
       provide: SIGNAL_HTTP_CONFIG,
       useValue: config
     }
+  ]);
+}
+
+/**
+ * Enables IndexedDB persistence for the HTTP response cache.
+ * Call alongside `provideSignalHttp()` in `app.config.ts`.
+ *
+ * On startup, cached entries are read from IndexedDB and loaded into the in-memory cache
+ * so components can serve stale data instantly before any network request fires.
+ * All subsequent `set`, `delete`, and `clear` calls are written through to IndexedDB.
+ *
+ * Safe to include in SSR apps — no IDB access happens on the server.
+ *
+ * @param options - Optional database and store name overrides.
+ * @returns Angular `EnvironmentProviders` to add to your app config.
+ *
+ * @example
+ * export const appConfig: ApplicationConfig = {
+ *   providers: [
+ *     provideSignalHttp({ baseUrl: 'https://api.example.com' }),
+ *     providePersistentCache({ dbName: 'my-app-cache' }),
+ *   ],
+ * };
+ */
+export function providePersistentCache(options?: IdbCacheOptions): EnvironmentProviders {
+  return makeEnvironmentProviders([
+    {
+      provide: IDB_CACHE_ADAPTER,
+      useFactory: (platformId: object) =>
+        isPlatformBrowser(platformId) ? new IdbCacheAdapter(options) : null,
+      deps: [PLATFORM_ID],
+    },
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (cache: HttpCacheService, adapter: IdbCacheAdapter | null) => async () => {
+        if (!adapter) return;
+        const entries = await adapter.getAll();
+        for (const [key, entry] of entries) {
+          cache.restore(key, entry);
+        }
+      },
+      deps: [HttpCacheService, IDB_CACHE_ADAPTER],
+      multi: true,
+    },
   ]);
 }
