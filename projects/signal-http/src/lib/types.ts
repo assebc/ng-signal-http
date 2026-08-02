@@ -144,13 +144,27 @@ export type RequestOptions<T> = HttpClientOptions<T>;
  *
  * @template TInput - The input type passed to `mutate()`.
  * @template TOutput - The response data type.
+ * @template TContext - Optional context returned by `onMutate` and passed to `onError` for rollback.
  *
  * @example
- * mutationSignal(factory, { onSuccess: (data) => toast('Saved!') });
+ * // Optimistic update with rollback
+ * mutationSignal(factory, {
+ *   onMutate: (input) => {
+ *     const prev = cache.get('GET:/todos');
+ *     cache.set('GET:/todos', [...currentTodos, { ...input, id: -1 }]);
+ *     return prev; // rollback context
+ *   },
+ *   onError: (err, input, prev) => {
+ *     if (prev) cache.set('GET:/todos', prev.data);
+ *   },
+ * });
  */
-export interface MutationOptions<TInput, TOutput> {
+export interface MutationOptions<TInput, TOutput, TContext = unknown> {
+  /** Called before the network request. Return value becomes the rollback context. */
+  onMutate?: (input: TInput) => TContext | Promise<TContext>;
   onSuccess?: (data: TOutput, input: TInput) => void;
-  onError?: (error: Error, input: TInput) => void;
+  /** `context` is the value returned by `onMutate`, or `undefined` if `onMutate` was not provided. */
+  onError?: (error: Error, input: TInput, context: TContext | undefined) => void;
   onSettled?: (data: TOutput | null, error: Error | null, input: TInput) => void;
 }
 
