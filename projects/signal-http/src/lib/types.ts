@@ -13,6 +13,29 @@ export interface SignalHttpConfig {
   headers?: Record<string, string>;
   timeout?: number;
   interceptors?: HttpInterceptor[];
+  /** Plugins registered with the library. Each plugin can contribute interceptors and cache hooks. */
+  plugins?: SignalHttpPlugin[];
+}
+
+// ─── Plugin ─────────────────────────────────────────────────
+
+/**
+ * A plugin bundles interceptors and cache lifecycle hooks under a single named unit.
+ * Register plugins via `provideSignalHttp({ plugins: [...] })`.
+ *
+ * @example
+ * const logPlugin: SignalHttpPlugin = {
+ *   name: 'logger',
+ *   onCacheSet: (key) => console.log('cached', key),
+ * };
+ */
+export interface SignalHttpPlugin {
+  name: string;
+  /** Interceptors contributed by this plugin — merged into the global interceptor chain. */
+  interceptors?: HttpInterceptor[];
+  onCacheSet?: (key: string, data: unknown) => void;
+  onCacheDelete?: (key: string) => void;
+  onCacheClear?: () => void;
 }
 
 // ─── Interceptors ───────────────────────────────────────────
@@ -110,6 +133,8 @@ export interface HttpClientOptions<T> {
   skipOnServer?: boolean;
   onSuccess?: (data: T) => void;
   onError?: (error: Error) => void;
+  /** Transform the raw response before setting the data signal. Throwing here sets the error signal. */
+  select?: (raw: unknown) => T;
 }
 
 /**
@@ -166,6 +191,8 @@ export interface MutationOptions<TInput, TOutput, TContext = unknown> {
   /** `context` is the value returned by `onMutate`, or `undefined` if `onMutate` was not provided. */
   onError?: (error: Error, input: TInput, context: TContext | undefined) => void;
   onSettled?: (data: TOutput | null, error: Error | null, input: TInput) => void;
+  /** Transform the raw response before setting the data signal. Throwing here sets the error signal. */
+  select?: (raw: unknown) => TOutput;
 }
 
 /**

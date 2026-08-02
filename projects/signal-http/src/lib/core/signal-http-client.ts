@@ -2,6 +2,7 @@ import { DestroyRef, inject, Injectable, Signal, signal } from "@angular/core";
 import { SIGNAL_HTTP_CONFIG } from "./providers";
 import { RequestConfig } from "../types";
 import { HttpError } from "./http-error";
+import { PluginService } from "./plugin.service";
 
 /**
  * Low-level HTTP service that wraps the native Fetch API.
@@ -15,6 +16,7 @@ import { HttpError } from "./http-error";
 @Injectable({ providedIn: 'root' })
 export class SignalHttpClient {
   private readonly config = inject(SIGNAL_HTTP_CONFIG, { optional: true }) ?? {};
+  private readonly plugins = inject(PluginService);
 
   /**
    * Fires a GET request and returns a read-only signal updated when the response arrives.
@@ -110,7 +112,12 @@ export class SignalHttpClient {
   async executeRequest<T>(config: RequestConfig): Promise<T> {
     let processedConfig = { ...config };
 
-    for (const interceptor of this.config.interceptors ?? []) {
+    const interceptors = [
+      ...(this.config.interceptors ?? []),
+      ...this.plugins.interceptors,
+    ];
+
+    for (const interceptor of interceptors) {
       if (interceptor.request) {
         processedConfig = await interceptor.request(processedConfig);
       }
@@ -152,7 +159,7 @@ export class SignalHttpClient {
 
       let response = await fetch(url, init);
 
-      for (const interceptor of this.config.interceptors ?? []) {
+      for (const interceptor of interceptors) {
         if (interceptor.response) {
           response = await interceptor.response(response);
         }
@@ -175,7 +182,7 @@ export class SignalHttpClient {
 
       let err = error instanceof Error ? error : new Error(String(error));
 
-      for (const interceptor of this.config.interceptors ?? []) {
+      for (const interceptor of interceptors) {
         if (interceptor.error) {
           err = await interceptor.error(err);
         }

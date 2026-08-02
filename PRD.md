@@ -137,7 +137,7 @@ Discovery → Evaluation → Adoption → Integration → Advocacy
 - ⏳ Video tutorials
 - ⏳ Interactive playground
 
-### 3.3 Phase 3 (v1.0.0 - 6 months post-launch)
+### 3.3 Phase 3 (v2.0.0 - 6 months post-launch)
 
 #### Enterprise Features
 - ⏳ Persistent cache (IndexedDB)

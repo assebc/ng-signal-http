@@ -39,8 +39,8 @@ export const appConfig: ApplicationConfig = {
 import { querySignal } from '@assebc/ng-signal-http';
 
 export class UsersComponent {
-  users = querySignal<User[]>(() => '/users');
-  // users.data(), users.loading(), users.error() are all ready
+  users = querySignal<User[]>('/users');
+  // users.data(), users.loading(), users.error(), users.status() — all reactive
 }
 ```
 
@@ -73,22 +73,9 @@ export class CreateUserComponent {
 | RxJS required | Yes | No |
 | Request cancellation | Manual | Automatic |
 | Retry | Manual | Built-in |
-
-```typescript
-// Before
-export class UsersComponent {
-  private http = inject(HttpClient);
-  users = toSignal(this.http.get<User[]>('/api/users'), { initialValue: [] });
-  // loading/error state: manual
-  // refetch: manual effect
-}
-
-// After
-export class UsersComponent {
-  users = querySignal<User[]>(() => '/api/users');
-  // users.data(), users.loading(), users.error(), users.refetch() — built-in
-}
-```
+| Caching / SWR | Manual | Built-in |
+| WebSocket | Separate | Built-in |
+| GraphQL | Separate | Built-in |
 
 ---
 
@@ -96,170 +83,272 @@ export class UsersComponent {
 
 ### `provideSignalHttp(config?)`
 
-Register once in `app.config.ts`:
+Register once in `app.config.ts`. Accepts global defaults and an optional plugin list.
 
 ```typescript
 provideSignalHttp({
   baseUrl: 'https://api.example.com',
   timeout: 30_000,
   headers: { 'X-API-Version': '2' },
-  interceptors: [authInterceptor]
+  interceptors: [authInterceptor],
+  plugins: [loggingPlugin],
 })
 ```
 
-### `querySignal<T>(urlFactory, options?)`
+### `querySignal<T>(url, options?)`
 
-For GET requests. Re-runs automatically when signal dependencies inside `urlFactory` change.
+Reactive GET — re-runs when signal dependencies inside the URL factory change.
 
 ```typescript
 const result = querySignal<User[]>(() => `/users?page=${page()}`);
 
-result.data()     // T | null
-result.loading()  // boolean
-result.error()    // Error | null
-result.status()   // 'idle' | 'loading' | 'success' | 'error'
-result.refetch()  // manually re-run
-result.reset()    // clear state
+result.data()       // T | null
+result.loading()    // boolean
+result.error()      // Error | null
+result.status()     // 'idle' | 'loading' | 'success' | 'error'
+result.isStale()    // boolean
+result.refetch()    // re-trigger manually
+result.invalidate() // mark stale without fetching
+result.reset()      // abort + restore initial state
 ```
 
-Options: `initialValue`, `lazy`, `retry`, `onSuccess`, `onError`.
+Key options: `lazy`, `retry`, `staleTime`, `refetchInterval`, `refetchOnFocus`, `refetchOnReconnect`, `skipOnServer`, `select`, `onSuccess`, `onError`.
 
-### `mutationSignal<TInput, TOutput>(requestFactory, options?)`
+### `mutationSignal<TInput, TOutput>(factory, options?)`
 
-For POST / PUT / PATCH / DELETE. Never executes automatically — user-triggered only.
+Imperative POST / PUT / PATCH / DELETE — never runs automatically.
 
 ```typescript
 const mutation = mutationSignal<CreateUserDto, User>(
-  (input) => ({ url: '/users', method: 'POST', body: input })
+  (input) => ({ url: '/users', method: 'POST', body: input }),
+  {
+    onMutate: (input) => captureSnapshot(), // runs before network; return value is rollback context
+    onSuccess: (data, input) => { /* ... */ },
+    onError: (err, input, snapshot) => rollback(snapshot),
+    onSettled: (data, err, input) => { /* ... */ },
+  }
 );
 
-mutation.isPending()   // boolean
-mutation.data()        // TOutput | null
-mutation.error()       // Error | null
-mutation.mutate(input)
+mutation.isPending()        // boolean
+mutation.data()             // TOutput | null
+mutation.error()            // Error | null
+await mutation.mutate(dto)  // → Promise<TOutput>
 mutation.reset()
 ```
 
-Options: `onSuccess`, `onError`, `onSettled`.
+### `websocketSignal<T>(url, options?)`
+
+Reactive WebSocket — updates the `data` signal on every message.
+
+```typescript
+const feed = websocketSignal<StockTick>('wss://api.example.com/feed', {
+  reconnect: { maxAttempts: 5, delay: (n) => 1000 * 2 ** n },
+});
+
+feed.data()    // T | null — latest message
+feed.status()  // 'connecting' | 'open' | 'closed' | 'error'
+feed.send({ type: 'subscribe', channel: 'BTC' })
+feed.close()
+feed.reconnect()
+```
+
+Pass a signal-reading factory as the URL to reconnect automatically when signals change.
+
+### `graphqlQuery<TData, TVariables>(endpoint, document, options?)`
+
+GraphQL query — unwraps `response.data`, surfaces `response.errors` as `GraphQLRequestError`.
+
+```typescript
+// Static query
+const users = graphqlQuery<{ users: User[] }>('/graphql', 'query { users { id name } }');
+
+// Reactive variables — re-fetches when userId() changes
+const user = graphqlQuery<{ user: User }, { id: number }>(
+  '/graphql',
+  'query GetUser($id: ID!) { user(id: $id) { id name } }',
+  { variables: () => ({ id: userId() }) },
+);
+```
+
+### `graphqlMutation<TData, TVariables>(endpoint, document, options?)`
+
+GraphQL mutation — same unwrapping and error surfacing as `graphqlQuery`.
+
+```typescript
+const create = graphqlMutation<{ createUser: User }, { name: string }>(
+  '/graphql',
+  'mutation CreateUser($name: String!) { createUser(name: $name) { id } }',
+);
+const { createUser } = await create.mutate({ name: 'Alice' });
+```
+
+### `paginatedQuerySignal<T>(urlFactory, options?)`
+
+Infinite-scroll / load-more pagination with a stable `pages` signal.
+
+```typescript
+const posts = paginatedQuerySignal<Post[]>(
+  (page) => `/posts?cursor=${page}`,
+  { getNextPageParam: (last) => last.at(-1)?.cursor }
+);
+
+posts.pages()            // T[][]
+posts.hasNextPage()      // boolean
+posts.isFetchingNextPage()
+await posts.fetchNextPage()
+```
+
+### `parallelQueries<T>(factories, options?)`
+
+Run N queries simultaneously and combine their results into a single reactive handle.
+
+```typescript
+const combined = parallelQueries<unknown>([
+  () => '/products',
+  () => '/categories',
+]);
+combined.data()    // (T | null)[]
+combined.loading() // true while any query is loading
+```
+
+### `prefetchQuery(urlOrConfig, options?)`
+
+Prime the cache before a component mounts — call in a route resolver or guard.
+
+```typescript
+await prefetchQuery('/users', { staleTime: 60_000 });
+```
+
+### `providePersistentCache(options?)`
+
+IndexedDB persistence — hydrates in-memory cache on startup, writes through on every set. SSR-safe.
+
+```typescript
+providers: [
+  provideSignalHttp({ baseUrl: '...' }),
+  providePersistentCache({ dbName: 'my-app-cache' }),
+]
+```
+
+### Plugin system
+
+Bundle interceptors and cache hooks under a named unit registered via `provideSignalHttp`.
+
+```typescript
+const analyticsPlugin: SignalHttpPlugin = {
+  name: 'analytics',
+  onCacheSet: (key, data) => track('cache_set', { key }),
+  onCacheDelete: (key) => track('cache_delete', { key }),
+  interceptors: [timingInterceptor],
+};
+
+provideSignalHttp({ plugins: [analyticsPlugin] })
+```
+
+### `withRequestLogging(options?)`
+
+Devtools interceptor — logs requests, responses, and errors to the console.
+
+```typescript
+provideSignalHttp({
+  interceptors: [withRequestLogging({ verbose: true })]
+})
+```
 
 ### `SignalHttpClient`
 
-Injectable service for imperative calls in services or guards:
+Injectable service for imperative calls in guards, resolvers, and services.
 
 ```typescript
-export class UserService {
-  private http = inject(SignalHttpClient);
-
-  getUser(id: number) {
-    return this.http.get<User>(`/users/${id}`);
-  }
-}
+const http = inject(SignalHttpClient);
+const user = await http.executeRequest<User>({ url: '/users/1', method: 'GET' });
 ```
 
-### Interceptors
+---
 
-All three hooks (`request`, `response`, `error`) support async functions and run in registration order:
+## Caching
+
+`staleTime` enables in-memory caching with stale-while-revalidate:
+
+```typescript
+querySignal('/feed', {
+  staleTime: 60_000,        // serve cache instantly; revalidate in background if older than 60 s
+  refetchOnFocus: true,     // revalidate when window regains focus
+  refetchOnReconnect: true, // revalidate when network reconnects
+  refetchInterval: 30_000,  // poll every 30 s
+})
+```
+
+- **Fresh hit** — cached data served immediately, no network request.
+- **Stale hit** — cached data served immediately; background revalidation updates the signal silently.
+- **Miss** — normal fetch; result stored in cache for future hits.
+
+Add `providePersistentCache()` to survive page reloads via IndexedDB.
+
+---
+
+## Interceptors
+
+Async hooks that run in registration order across every request:
 
 ```typescript
 const authInterceptor: HttpInterceptor = {
   request: async (config) => ({
     ...config,
-    headers: { ...config.headers, Authorization: `Bearer ${getToken()}` }
-  })
+    headers: { ...config.headers, Authorization: `Bearer ${getToken()}` },
+  }),
+  error: async (err) => {
+    if (err instanceof HttpError && err.isUnauthorized) await refreshToken();
+    return err;
+  },
 };
-
-provideSignalHttp({ interceptors: [authInterceptor] })
 ```
 
 ---
 
 ## Reactive queries
 
-Signal dependencies inside `urlFactory` are tracked automatically. When they change, the query re-runs and the previous in-flight request is cancelled:
+Signal reads inside the URL factory are tracked automatically. Changing them re-fetches and cancels the previous in-flight request:
 
 ```typescript
 export class UserDetailComponent {
   userId = input.required<number>();
-
   user = querySignal<User>(() => `/users/${this.userId()}`);
-  // re-fetches whenever userId changes, previous request cancelled
 }
 ```
 
 ---
 
-## Retry
-
-```typescript
-querySignal(() => '/users', {
-  retry: { count: 3, delay: (attempt) => 1000 * 2 ** attempt }
-})
-```
-
-`AbortError` is never retried. Retry logic applies to both queries and mutations.
-
----
-
-## MVP features
-
-- Native Fetch wrapper — no `@angular/common/http` dependency
-- Signal-native queries with auto-refetch on reactive dependencies
-- Signal-native mutations (POST / PUT / PATCH / DELETE)
-- Request / response / error interceptors (async, run in order)
-- Automatic request cancellation via `AbortController` on destroy and dep change
-- Retry with exponential backoff, configurable per-request
-- Full TypeScript inference — no explicit generic annotations needed at call sites
-- Zero runtime dependencies beyond `@angular/core`
-
----
-
 ## Roadmap
 
-**v0.2.0**
-In-memory cache with TTL · stale-while-revalidate · optimistic updates · request deduplication · SSR skip-fetch · refetch on focus / reconnect
+**v0.1.0 — MVP** ✅  
+`querySignal`, `mutationSignal`, `SignalHttpClient`, `provideSignalHttp`, interceptors, retry, cancellation.
 
-**v1.0.0**
-Persistent cache (IndexedDB) · WebSocket signal integration · GraphQL adapter · plugin system
+**v0.2.0** ✅  
+In-memory cache + SWR · request deduplication · optimistic updates · `skipOnServer` · refetch on focus/reconnect · `paginatedQuerySignal` · `parallelQueries` · `prefetchQuery` · `withRequestLogging`.
+
+**v2.0.0** ✅  
+Persistent cache (IndexedDB) · WebSocket signal integration · GraphQL adapter · plugin system.
 
 ---
 
 ## Migration from HttpClient
 
-See **[MIGRATION.md](MIGRATION.md)** for a step-by-step guide covering:
-
-- Replacing `provideHttpClient()` with `provideSignalHttp()`
-- Converting GET requests to `querySignal`
-- Converting mutations to `mutationSignal`
-- Migrating interceptors
-- Using `SignalHttpClient` for imperative calls in services
+See **[MIGRATION.md](MIGRATION.md)** for a step-by-step guide.
 
 ---
 
 ## Contributing & development
 
-See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide. Quick reference:
-
-```
-/
-├── projects/signal-http/   ← library source
-├── projects/demo/          ← Angular SSR demo app
-└── projects/demo-e2e/      ← Cypress E2E tests
-```
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full guide.
 
 ```bash
-npm install                # install deps
-npm start                  # demo app → http://localhost:4200
-npm test                   # unit tests
-npm run test:ci            # unit tests with coverage
-npm run build              # build the library
-npm run lint               # lint
-npm run start:demo-e2e     # Cypress E2E
-```
-
-Releases are triggered by pushing a version tag — CI publishes to both npm and GitHub Packages:
-
-```bash
-git tag v1.0.0 && git push origin v1.0.0
+npm install        # install deps
+npm start          # demo app → http://localhost:4200
+npm test           # unit tests
+npm run test:ci    # unit tests with coverage
+npm run build      # build the library
+npm run lint       # lint
 ```
 
 ---

@@ -6,11 +6,17 @@ import { RequestConfig } from '../types';
  */
 export function buildCacheKey(urlResult: string | RequestConfig): string {
   if (typeof urlResult === 'string') return `GET:${urlResult}`;
-  const { method, url, params } = urlResult;
-  if (!params || Object.keys(params).length === 0) return `${method}:${url}`;
-  const sorted = Object.keys(params)
-    .sort()
-    .map(k => `${k}=${params[k]}`)
-    .join('&');
-  return `${method}:${url}?${sorted}`;
+  const { method, url, params, body } = urlResult;
+  let key = `${method}:${url}`;
+  if (params && Object.keys(params).length > 0) {
+    const sorted = Object.keys(params)
+      .sort()
+      .map(k => `${k}=${params[k]}`)
+      .join('&');
+    key += `?${sorted}`;
+  }
+  if (body !== undefined) {
+    key += `:${JSON.stringify(body)}`;
+  }
+  return key;
 }
