@@ -7,6 +7,10 @@ import { HttpClientResult } from '../types';
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
+// eslint-disable-next-line @typescript-eslint/no-empty-function
+const noop = () => {};
+const PENDING = new Promise<never>(noop);
+
 function makeJsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -36,7 +40,7 @@ describe('querySignal', () => {
 
   describe('initial state (non-lazy)', () => {
     it('data starts as null', () => {
-      fetchMock.mockReturnValueOnce(new Promise(() => {}));
+      fetchMock.mockReturnValueOnce(PENDING);
       let result!: HttpClientResult<unknown>;
       TestBed.runInInjectionContext(() => {
         result = querySignal('/items');
@@ -45,7 +49,7 @@ describe('querySignal', () => {
     });
 
     it('loading starts as true', () => {
-      fetchMock.mockReturnValueOnce(new Promise(() => {}));
+      fetchMock.mockReturnValueOnce(PENDING);
       let result!: HttpClientResult<unknown>;
       TestBed.runInInjectionContext(() => {
         result = querySignal('/items');
@@ -54,7 +58,7 @@ describe('querySignal', () => {
     });
 
     it('error starts as null', () => {
-      fetchMock.mockReturnValueOnce(new Promise(() => {}));
+      fetchMock.mockReturnValueOnce(PENDING);
       let result!: HttpClientResult<unknown>;
       TestBed.runInInjectionContext(() => {
         result = querySignal('/items');
@@ -63,7 +67,7 @@ describe('querySignal', () => {
     });
 
     it('status starts as loading', () => {
-      fetchMock.mockReturnValueOnce(new Promise(() => {}));
+      fetchMock.mockReturnValueOnce(PENDING);
       let result!: HttpClientResult<unknown>;
       TestBed.runInInjectionContext(() => {
         result = querySignal('/items');
@@ -100,7 +104,7 @@ describe('querySignal', () => {
 
   describe('initialValue option', () => {
     it('data starts as the provided initialValue', () => {
-      fetchMock.mockReturnValueOnce(new Promise(() => {}));
+      fetchMock.mockReturnValueOnce(PENDING);
       let result!: HttpClientResult<string[]>;
       TestBed.runInInjectionContext(() => {
         result = querySignal<string[]>('/items', { initialValue: ['seed'] });
@@ -165,7 +169,7 @@ describe('querySignal', () => {
       });
       await result.refetch();
       expect(result.error()).toBeInstanceOf(Error);
-      expect(result.error()!.message).toBe('network down');
+      expect(result.error()?.message).toBe('network down');
     });
 
     it('sets status to error', async () => {
@@ -373,7 +377,7 @@ describe('querySignal', () => {
 
     it('skips the tick when a fetch is already in flight', async () => {
       vi.useFakeTimers();
-      fetchMock.mockReturnValue(new Promise(() => {}));
+      fetchMock.mockReturnValue(PENDING);
 
       TestBed.runInInjectionContext(() => {
         // non-lazy: starts loading immediately, so interval ticks are skipped
@@ -455,7 +459,7 @@ describe('querySignal', () => {
     });
 
     it('does not refetch on reconnect when a request is already in flight', async () => {
-      fetchMock.mockReturnValue(new Promise(() => {}));
+      fetchMock.mockReturnValue(PENDING);
 
       let result!: HttpClientResult<unknown>;
       TestBed.runInInjectionContext(() => {

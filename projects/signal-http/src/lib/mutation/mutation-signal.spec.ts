@@ -6,6 +6,9 @@ import { MutationResult } from '../types';
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
 
+// eslint-disable-next-line @typescript-eslint/no-empty-function
+const noop = () => {};
+
 function makeJsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -193,9 +196,9 @@ describe('mutationSignal', () => {
           body: input,
         }));
       });
-      await mut.mutate({ name: 'Alice' }).catch(() => {});
+      await mut.mutate({ name: 'Alice' }).catch(noop);
       expect(mut.error()).toBeInstanceOf(Error);
-      expect(mut.error()!.message).toBe('server error');
+      expect(mut.error()?.message).toBe('server error');
     });
 
     it('isPending is false after failure', async () => {
@@ -208,7 +211,7 @@ describe('mutationSignal', () => {
           body: input,
         }));
       });
-      await mut.mutate({ name: 'Alice' }).catch(() => {});
+      await mut.mutate({ name: 'Alice' }).catch(noop);
       expect(mut.isPending()).toBe(false);
     });
 
@@ -222,7 +225,7 @@ describe('mutationSignal', () => {
           body: input,
         }));
       });
-      await mut.mutate({ name: 'Alice' }).catch(() => {});
+      await mut.mutate({ name: 'Alice' }).catch(noop);
       expect(mut.data()).toBeNull();
     });
 
@@ -237,7 +240,7 @@ describe('mutationSignal', () => {
           { onError }
         );
       });
-      await mut.mutate({ name: 'Alice' }).catch(() => {});
+      await mut.mutate({ name: 'Alice' }).catch(noop);
       expect(onError).toHaveBeenCalledWith(err, { name: 'Alice' });
     });
 
@@ -252,7 +255,7 @@ describe('mutationSignal', () => {
           { onSettled }
         );
       });
-      await mut.mutate({ name: 'Alice' }).catch(() => {});
+      await mut.mutate({ name: 'Alice' }).catch(noop);
       expect(onSettled).toHaveBeenCalledWith(null, err, { name: 'Alice' });
     });
 
@@ -266,7 +269,7 @@ describe('mutationSignal', () => {
           body: input,
         }));
       });
-      await mut.mutate({ name: 'Alice' }).catch(() => {});
+      await mut.mutate({ name: 'Alice' }).catch(noop);
       expect(mut.error()).toBeInstanceOf(Error);
     });
   });
@@ -299,7 +302,7 @@ describe('mutationSignal', () => {
           body: input,
         }));
       });
-      await mut.mutate({ name: 'Alice' }).catch(() => {});
+      await mut.mutate({ name: 'Alice' }).catch(noop);
       mut.reset();
       expect(mut.error()).toBeNull();
     });
@@ -314,7 +317,7 @@ describe('mutationSignal', () => {
           body: input,
         }));
       });
-      await mut.mutate({ name: 'Alice' }).catch(() => {});
+      await mut.mutate({ name: 'Alice' }).catch(noop);
       mut.reset();
       expect(mut.isPending()).toBe(false);
     });

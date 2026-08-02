@@ -2,11 +2,14 @@ import { Signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { SignalHttpClient } from './signal-http-client';
 import { provideSignalHttp } from './providers';
-import { SIGNAL_HTTP_CONFIG } from './providers';
 import { HttpError } from './http-error';
 
 const fetchMock = vi.fn();
 vi.stubGlobal('fetch', fetchMock);
+
+// eslint-disable-next-line @typescript-eslint/no-empty-function
+const noop = () => {};
+const PENDING = new Promise<never>(noop);
 
 function makeJsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -198,11 +201,11 @@ describe('SignalHttpClient', () => {
       let capturedSignal!: AbortSignal;
       fetchMock.mockImplementation((_url: string, init: RequestInit) => {
         capturedSignal = init.signal as AbortSignal;
-        return new Promise(() => {}); // never resolves
+        return PENDING; // never resolves
       });
 
       const p = client.executeRequest({ url: '/slow', method: 'GET', timeout: 1000 });
-      p.catch(() => {}); // prevent unhandled rejection on the dangling promise
+      p.catch(noop); // prevent unhandled rejection on the dangling promise
 
       await vi.advanceTimersByTimeAsync(1000);
 
@@ -220,11 +223,11 @@ describe('SignalHttpClient', () => {
       let capturedSignal!: AbortSignal;
       fetchMock.mockImplementation((_url: string, init: RequestInit) => {
         capturedSignal = init.signal as AbortSignal;
-        return new Promise(() => {});
+        return PENDING;
       });
 
       const p = c.executeRequest({ url: '/slow', method: 'GET' });
-      p.catch(() => {});
+      p.catch(noop);
 
       await vi.advanceTimersByTimeAsync(500);
 
@@ -242,7 +245,7 @@ describe('SignalHttpClient', () => {
         if ((init.signal as AbortSignal).aborted) {
           return Promise.reject(Object.assign(new Error('Aborted'), { name: 'AbortError' }));
         }
-        return new Promise(() => {});
+        return PENDING;
       });
 
       const controller = new AbortController();
@@ -259,11 +262,11 @@ describe('SignalHttpClient', () => {
 
       fetchMock.mockImplementation((_url: string, init: RequestInit) => {
         capturedSignal = init.signal as AbortSignal;
-        return new Promise(() => {}); // never resolves
+        return PENDING; // never resolves
       });
 
       const p = client.executeRequest({ url: '/test', method: 'GET', signal: external.signal });
-      p.catch(() => {});
+      p.catch(noop);
 
       external.abort();
       await Promise.resolve(); // flush microtasks
@@ -330,7 +333,7 @@ describe('SignalHttpClient', () => {
       });
       const c = TestBed.inject(SignalHttpClient);
       fetchMock.mockRejectedValueOnce(new Error('network failure'));
-      await c.executeRequest({ url: 'https://api.test.com/test', method: 'GET' }).catch(() => {});
+      await c.executeRequest({ url: 'https://api.test.com/test', method: 'GET' }).catch(noop);
       expect(errorInterceptor).toHaveBeenCalledOnce();
     });
 
@@ -358,7 +361,7 @@ describe('SignalHttpClient', () => {
 
   describe('get()', () => {
     it('starts as null before the fetch resolves', () => {
-      fetchMock.mockReturnValueOnce(new Promise(() => {})); // never resolves
+      fetchMock.mockReturnValueOnce(PENDING); // never resolves
       let sig!: Signal<{ id: number } | null>;
       TestBed.runInInjectionContext(() => {
         sig = client.get<{ id: number }>('/users/1');
