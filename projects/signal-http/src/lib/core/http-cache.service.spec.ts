@@ -54,6 +54,26 @@ describe('HttpCacheService', () => {
     expect(cache.has('b')).toBe(false);
   });
 
+  // ─── inflight deduplication ────────────────────────────────────────────────
+
+  it('getInflight() returns undefined for a missing key', () => {
+    expect(cache.getInflight('missing')).toBeUndefined();
+  });
+
+  it('setInflight() stores a promise and getInflight() returns it', () => {
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    const p = new Promise<unknown>(() => {});
+    cache.setInflight('key', p);
+    expect(cache.getInflight('key')).toBe(p);
+  });
+
+  it('deleteInflight() removes the promise', () => {
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    cache.setInflight('key', new Promise(() => {}));
+    cache.deleteInflight('key');
+    expect(cache.getInflight('key')).toBeUndefined();
+  });
+
   // ─── isExpired ──────────────────────────────────────────────────────────────
 
   describe('isExpired()', () => {
