@@ -327,7 +327,7 @@ export class UserDetailComponent {
 **v0.2.0** ✅  
 In-memory cache + SWR · request deduplication · optimistic updates · `skipOnServer` · refetch on focus/reconnect · `paginatedQuerySignal` · `parallelQueries` · `prefetchQuery` · `withRequestLogging`.
 
-**v1.0.0** ✅  
+**v2.0.0** ✅  
 Persistent cache (IndexedDB) · WebSocket signal integration · GraphQL adapter · plugin system.
 
 ---
