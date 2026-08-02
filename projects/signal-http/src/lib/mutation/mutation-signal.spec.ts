@@ -241,7 +241,7 @@ describe('mutationSignal', () => {
         );
       });
       await mut.mutate({ name: 'Alice' }).catch(noop);
-      expect(onError).toHaveBeenCalledWith(err, { name: 'Alice' });
+      expect(onError).toHaveBeenCalledWith(err, { name: 'Alice' }, undefined);
     });
 
     it('calls onSettled with null data, the error, and input', async () => {
@@ -320,6 +320,108 @@ describe('mutationSignal', () => {
       await mut.mutate({ name: 'Alice' }).catch(noop);
       mut.reset();
       expect(mut.isPending()).toBe(false);
+    });
+  });
+
+  // ─── onMutate (optimistic updates) ──────────────────────────────────────
+
+  describe('onMutate', () => {
+    it('is called with the input before the network request fires', async () => {
+      const onMutate = vi.fn().mockResolvedValue(undefined);
+      let networkCalledAfterMutate = false;
+      fetchMock.mockImplementation(() => {
+        networkCalledAfterMutate = onMutate.mock.calls.length > 0;
+        return Promise.resolve(makeJsonResponse({ id: 1, name: 'Alice' }));
+      });
+      let mut!: MutationResult<CreateUserInput, UserOutput>;
+      TestBed.runInInjectionContext(() => {
+        mut = mutationSignal<CreateUserInput, UserOutput>(
+          (input) => ({ url: '/users', method: 'POST', body: input }),
+          { onMutate }
+        );
+      });
+      await mut.mutate({ name: 'Alice' });
+      expect(onMutate).toHaveBeenCalledWith({ name: 'Alice' });
+      expect(networkCalledAfterMutate).toBe(true);
+    });
+
+    it('passes the onMutate return value as context to onError on failure', async () => {
+      const rollback = { snapshot: [1, 2, 3] };
+      const onMutate = vi.fn().mockResolvedValue(rollback);
+      const onError = vi.fn();
+      fetchMock.mockRejectedValueOnce(new Error('server error'));
+      let mut!: MutationResult<CreateUserInput, UserOutput>;
+      TestBed.runInInjectionContext(() => {
+        mut = mutationSignal<CreateUserInput, UserOutput>(
+          (input) => ({ url: '/users', method: 'POST', body: input }),
+          { onMutate, onError }
+        );
+      });
+      await mut.mutate({ name: 'Alice' }).catch(noop);
+      expect(onError).toHaveBeenCalledWith(
+        expect.any(Error),
+        { name: 'Alice' },
+        rollback
+      );
+    });
+
+    it('passes undefined as context to onError when onMutate is not provided', async () => {
+      const onError = vi.fn();
+      fetchMock.mockRejectedValueOnce(new Error('boom'));
+      let mut!: MutationResult<CreateUserInput, UserOutput>;
+      TestBed.runInInjectionContext(() => {
+        mut = mutationSignal<CreateUserInput, UserOutput>(
+          (input) => ({ url: '/users', method: 'POST', body: input }),
+          { onError }
+        );
+      });
+      await mut.mutate({ name: 'Alice' }).catch(noop);
+      expect(onError).toHaveBeenCalledWith(expect.any(Error), { name: 'Alice' }, undefined);
+    });
+
+    it('aborts the mutation without firing the network request when onMutate throws', async () => {
+      fetchMock.mockResolvedValueOnce(makeJsonResponse({ id: 1, name: 'Alice' }));
+      let mut!: MutationResult<CreateUserInput, UserOutput>;
+      TestBed.runInInjectionContext(() => {
+        mut = mutationSignal<CreateUserInput, UserOutput>(
+          (input) => ({ url: '/users', method: 'POST', body: input }),
+          { onMutate: () => { throw new Error('optimistic failed'); } }
+        );
+      });
+      await mut.mutate({ name: 'Alice' }).catch(noop);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('sets the error signal and clears isPending when onMutate throws', async () => {
+      let mut!: MutationResult<CreateUserInput, UserOutput>;
+      TestBed.runInInjectionContext(() => {
+        mut = mutationSignal<CreateUserInput, UserOutput>(
+          (input) => ({ url: '/users', method: 'POST', body: input }),
+          { onMutate: () => { throw new Error('optimistic failed'); } }
+        );
+      });
+      await mut.mutate({ name: 'Alice' }).catch(noop);
+      expect(mut.error()?.message).toBe('optimistic failed');
+      expect(mut.isPending()).toBe(false);
+    });
+
+    it('does not call onError or onSettled when onMutate throws', async () => {
+      const onError = vi.fn();
+      const onSettled = vi.fn();
+      let mut!: MutationResult<CreateUserInput, UserOutput>;
+      TestBed.runInInjectionContext(() => {
+        mut = mutationSignal<CreateUserInput, UserOutput>(
+          (input) => ({ url: '/users', method: 'POST', body: input }),
+          {
+            onMutate: () => { throw new Error('optimistic failed'); },
+            onError,
+            onSettled,
+          }
+        );
+      });
+      await mut.mutate({ name: 'Alice' }).catch(noop);
+      expect(onError).not.toHaveBeenCalled();
+      expect(onSettled).not.toHaveBeenCalled();
     });
   });
 
