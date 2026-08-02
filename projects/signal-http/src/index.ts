@@ -11,6 +11,7 @@ export type { RequestLoggingOptions } from './lib/core/devtools';
 
 // Reactive API
 export { querySignal } from './lib/query/query-signal';
+export { websocketSignal } from './lib/websocket/websocket-signal';
 export { mutationSignal } from './lib/mutation/mutation-signal';
 export { prefetchQuery } from './lib/query/prefetch-query';
 export { paginatedQuerySignal } from './lib/query/paginated-query-signal';
@@ -31,6 +32,7 @@ export type {
 } from './lib/types';
 
 export type { UrlFactory } from './lib/query/query.types';
+export type { WebSocketOptions, WebSocketResult, WebSocketStatus, ReconnectConfig } from './lib/websocket/websocket.types';
 export type { MutationFactory } from './lib/mutation/mutation.types';
 export type { PaginatedOptions, PaginatedResult } from './lib/query/paginated-query-signal';
 export type { ParallelQueriesResult } from './lib/query/parallel-queries';
