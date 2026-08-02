@@ -735,3 +735,73 @@ describe('querySignal', () => {
     });
   });
 });
+
+// ─── SSR (skipOnServer) ───────────────────────────────────────────────────────
+
+describe('querySignal — skipOnServer', () => {
+  beforeEach(() => {
+    fetchMock.mockReset();
+    TestBed.configureTestingModule({
+      providers: [
+        provideSignalHttp({ baseUrl: 'https://api.test.com' }),
+        { provide: PLATFORM_ID, useValue: 'server' },  // simulate SSR
+      ],
+    });
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('does not fetch on init when skipOnServer is true', () => {
+    TestBed.runInInjectionContext(() => {
+      querySignal('/items', { skipOnServer: true });
+    });
+    TestBed.flushEffects();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('starts with loading false and status idle when skipOnServer is true', () => {
+    let result!: HttpClientResult<unknown>;
+    TestBed.runInInjectionContext(() => {
+      result = querySignal('/items', { skipOnServer: true });
+    });
+    expect(result.loading()).toBe(false);
+    expect(result.status()).toBe('idle');
+    expect(result.data()).toBeNull();
+  });
+
+  it('manual refetch() is also a no-op on the server when skipOnServer is true', async () => {
+    let result!: HttpClientResult<unknown>;
+    TestBed.runInInjectionContext(() => {
+      result = querySignal('/items', { skipOnServer: true, lazy: true });
+    });
+    await result.refetch();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(result.status()).toBe('idle');
+  });
+
+  it('still fetches when skipOnServer is false (default) on the server', () => {
+    fetchMock.mockReturnValueOnce(PENDING);
+    TestBed.runInInjectionContext(() => {
+      querySignal('/items');  // no skipOnServer — default behaviour
+    });
+    TestBed.flushEffects();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('fetches normally in the browser even when skipOnServer is true', () => {
+    // Re-configure with browser platform for this one test
+    TestBed.resetTestingModule();
+    fetchMock.mockReturnValueOnce(PENDING);
+    TestBed.configureTestingModule({
+      providers: [
+        provideSignalHttp({ baseUrl: 'https://api.test.com' }),
+        { provide: PLATFORM_ID, useValue: 'browser' },
+      ],
+    });
+    TestBed.runInInjectionContext(() => {
+      querySignal('/items', { skipOnServer: true });
+    });
+    TestBed.flushEffects();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});

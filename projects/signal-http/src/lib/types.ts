@@ -102,6 +102,12 @@ export interface HttpClientOptions<T> {
   refetchInterval?: number;
   refetchOnFocus?: boolean;
   refetchOnReconnect?: boolean;
+  /**
+   * When `true`, all fetches (initial, reactive, and manual `refetch()`) are skipped
+   * when running on the server. Status stays `idle`, data stays `null` (or `initialValue`).
+   * Use this to avoid server-side requests that should only happen in the browser.
+   */
+  skipOnServer?: boolean;
   onSuccess?: (data: T) => void;
   onError?: (error: Error) => void;
 }

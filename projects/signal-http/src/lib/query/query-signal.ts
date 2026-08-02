@@ -62,10 +62,12 @@ export function querySignal<T>(
 
   const factory: UrlFactory = typeof url === 'string' ? () => url : url;
 
+  const skipServer = (options?.skipOnServer ?? false) && !isBrowser;
+
   const data = signal<T | null>(options?.initialValue ?? null);
-  const loading = signal<boolean>(!options?.lazy);
+  const loading = signal<boolean>(!options?.lazy && !skipServer);
   const error = signal<Error | null>(null);
-  const status = signal<HttpClientStatus>(options?.lazy ? 'idle' : 'loading');
+  const status = signal<HttpClientStatus>((options?.lazy || skipServer) ? 'idle' : 'loading');
   const lastFetchAt = signal<number>(0);
 
   const isStale = computed(() => {
@@ -77,6 +79,8 @@ export function querySignal<T>(
   let revalidating = false;
 
   const doFetch = async (background = false): Promise<void> => {
+    if (options?.skipOnServer && !isBrowser) return;
+
     const ac = new AbortController();
 
     if (background) {
