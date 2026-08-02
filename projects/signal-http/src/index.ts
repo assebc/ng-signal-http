@@ -4,10 +4,15 @@ export { provideSignalHttp, SIGNAL_HTTP_CONFIG } from './lib/core/providers';
 export { HttpError } from './lib/core/http-error';
 export { HttpCacheService } from './lib/core/http-cache.service';
 export type { CacheEntry } from './lib/core/http-cache.service';
+export { withRequestLogging } from './lib/core/devtools';
+export type { RequestLoggingOptions } from './lib/core/devtools';
 
 // Reactive API
 export { querySignal } from './lib/query/query-signal';
 export { mutationSignal } from './lib/mutation/mutation-signal';
+export { prefetchQuery } from './lib/query/prefetch-query';
+export { paginatedQuerySignal } from './lib/query/paginated-query-signal';
+export { parallelQueries } from './lib/query/parallel-queries';
 
 // Types, everything a consumer might need to annotate their code
 export type {
@@ -25,3 +30,5 @@ export type {
 
 export type { UrlFactory } from './lib/query/query.types';
 export type { MutationFactory } from './lib/mutation/mutation.types';
+export type { PaginatedOptions, PaginatedResult } from './lib/query/paginated-query-signal';
+export type { ParallelQueriesResult } from './lib/query/parallel-queries';
