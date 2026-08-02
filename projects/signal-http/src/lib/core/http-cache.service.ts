@@ -49,4 +49,10 @@ export class HttpCacheService {
   deleteInflight(key: string): void {
     this.inflight.delete(key);
   }
+
+  // ── Inspection ─────────────────────────────────────────────────────────────
+
+  entries(): Array<[string, CacheEntry]> {
+    return Array.from(this.store.entries());
+  }
 }
