@@ -1,6 +1,8 @@
 // Core, what consumers inject and configure (low level)
 export { SignalHttpClient } from './lib/core/signal-http-client';
-export { provideSignalHttp, SIGNAL_HTTP_CONFIG } from './lib/core/providers';
+export { provideSignalHttp, providePersistentCache, SIGNAL_HTTP_CONFIG } from './lib/core/providers';
+export { IdbCacheAdapter } from './lib/core/idb-cache';
+export type { IdbCacheOptions } from './lib/core/idb-cache';
 export { HttpError } from './lib/core/http-error';
 export { HttpCacheService } from './lib/core/http-cache.service';
 export type { CacheEntry } from './lib/core/http-cache.service';
