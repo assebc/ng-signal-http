@@ -2,6 +2,8 @@
 export { SignalHttpClient } from './lib/core/signal-http-client';
 export { provideSignalHttp, SIGNAL_HTTP_CONFIG } from './lib/core/providers';
 export { HttpError } from './lib/core/http-error';
+export { HttpCacheService } from './lib/core/http-cache.service';
+export type { CacheEntry } from './lib/core/http-cache.service';
 
 // Reactive API
 export { querySignal } from './lib/query/query-signal';

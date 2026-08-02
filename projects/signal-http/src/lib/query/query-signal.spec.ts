@@ -501,4 +501,123 @@ describe('querySignal', () => {
       expect(result.data()).toEqual({ ok: true });
     });
   });
+
+  // ─── Cache (staleTime) ────────────────────────────────────────────────────
+
+  describe('cache (staleTime)', () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(0);
+    });
+    afterEach(() => vi.useRealTimers());
+
+    it('skips network on a fresh cache hit', async () => {
+      fetchMock.mockResolvedValueOnce(makeJsonResponse({ n: 1 }));
+      let result!: HttpClientResult<{ n: number }>;
+      TestBed.runInInjectionContext(() => {
+        result = querySignal<{ n: number }>('/data', { lazy: true, staleTime: 5_000 });
+      });
+
+      await result.refetch();  // t=0 — populates cache
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      vi.setSystemTime(3_000);  // within staleTime
+      await result.refetch();   // fresh cache hit — no network
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(result.data()).toEqual({ n: 1 });
+      expect(result.loading()).toBe(false);
+      expect(result.status()).toBe('success');
+    });
+
+    it('serves stale data immediately and revalidates in the background', async () => {
+      fetchMock
+        .mockResolvedValueOnce(makeJsonResponse({ n: 1 }))
+        .mockResolvedValueOnce(makeJsonResponse({ n: 2 }));
+      let result!: HttpClientResult<{ n: number }>;
+      TestBed.runInInjectionContext(() => {
+        result = querySignal<{ n: number }>('/data', { lazy: true, staleTime: 5_000 });
+      });
+
+      await result.refetch();  // t=0 — populates cache with n=1
+      expect(result.data()).toEqual({ n: 1 });
+
+      vi.setSystemTime(6_000);  // past staleTime
+
+      await result.refetch();  // stale hit: serves n=1 + kicks off background revalidation
+      expect(result.data()).toEqual({ n: 1 });   // stale data served immediately
+      expect(result.loading()).toBe(false);       // no loading spinner shown
+      // background fetch is dispatched synchronously inside the stale hit path
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+
+      await flushPromises();  // let background fetch resolve
+      expect(result.data()).toEqual({ n: 2 });   // silently updated
+      expect(result.loading()).toBe(false);
+    });
+
+    it('does not show a loading spinner during background revalidation', async () => {
+      fetchMock
+        .mockResolvedValueOnce(makeJsonResponse({ n: 1 }))
+        .mockReturnValueOnce(new Promise(noop));  // background fetch stays pending
+      let result!: HttpClientResult<{ n: number }>;
+      TestBed.runInInjectionContext(() => {
+        result = querySignal<{ n: number }>('/data', { lazy: true, staleTime: 5_000 });
+      });
+
+      await result.refetch();  // t=0 — populates cache
+      vi.setSystemTime(6_000);
+      await result.refetch();  // stale hit — background revalidation pending
+      expect(result.loading()).toBe(false);  // no spinner during background fetch
+    });
+
+    it('clears cache on invalidate() so the next refetch goes to the network', async () => {
+      fetchMock
+        .mockResolvedValueOnce(makeJsonResponse({ n: 1 }))
+        .mockResolvedValueOnce(makeJsonResponse({ n: 2 }));
+      let result!: HttpClientResult<{ n: number }>;
+      TestBed.runInInjectionContext(() => {
+        result = querySignal<{ n: number }>('/data', { lazy: true, staleTime: 60_000 });
+      });
+
+      await result.refetch();  // populate cache (fresh for 60s)
+      result.invalidate();     // evict cache entry
+
+      vi.setSystemTime(1_000);  // still within staleTime, but entry was evicted
+      await result.refetch();   // cache miss → network
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(result.data()).toEqual({ n: 2 });
+    });
+
+    it('clears cache on reset() so the next refetch goes to the network', async () => {
+      fetchMock
+        .mockResolvedValueOnce(makeJsonResponse({ n: 1 }))
+        .mockResolvedValueOnce(makeJsonResponse({ n: 2 }));
+      let result!: HttpClientResult<{ n: number }>;
+      TestBed.runInInjectionContext(() => {
+        result = querySignal<{ n: number }>('/data', { lazy: true, staleTime: 60_000 });
+      });
+
+      await result.refetch();  // populate cache (fresh for 60s)
+      result.reset();
+      expect(result.data()).toBeNull();  // state cleared
+
+      await result.refetch();  // cache was evicted → network
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(result.data()).toEqual({ n: 2 });
+    });
+
+    it('does not cache responses when staleTime is not set', async () => {
+      fetchMock
+        .mockResolvedValueOnce(makeJsonResponse({ n: 1 }))
+        .mockResolvedValueOnce(makeJsonResponse({ n: 2 }));
+      let result!: HttpClientResult<{ n: number }>;
+      TestBed.runInInjectionContext(() => {
+        result = querySignal<{ n: number }>('/data', { lazy: true });  // no staleTime
+      });
+
+      await result.refetch();
+      await result.refetch();  // no cache → goes to network again
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(result.data()).toEqual({ n: 2 });
+    });
+  });
 });

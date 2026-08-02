@@ -16,5 +16,9 @@
   },
   "homepage": "https://github.com/assebc/ng-signal-http#readme",
   "license": "MIT",
-  "keywords": ["angular", "signals", "http", "zoneless", "fetch", "rxjs-free"]
+  "keywords": ["angular", "signals", "http", "zoneless", "fetch", "rxjs-free"],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
 }
